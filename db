@@ -1,0 +1,172 @@
+db.py — persistent SQLite storage for the Inuka M&E Console.
+
+This is real, on-disk state: stop the server, restart it, and the data
+(and the dropout model's view of it) is still there. That persistence is
+the thing a client-side simulation can never honestly claim.
+"""
+
+import sqlite3
+import threading
+from datetime import datetime, timezone
+from pathlib import Path
+
+DB_PATH = Path(__file__).parent / "data" / "inuka.db"
+_lock = threading.Lock()
+
+
+def get_conn():
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db(reset=False):
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if reset and DB_PATH.exists():
+        DB_PATH.unlink()
+
+    conn = get_conn()
+    conn.executescript("""
+    CREATE TABLE IF NOT EXISTS events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        beneficiary_id TEXT NOT NULL,
+        beneficiary_token TEXT NOT NULL,
+        pillar TEXT NOT NULL,
+        region TEXT NOT NULL,
+        application_date TEXT,
+        milestone_status TEXT NOT NULL,
+        attendance_pct REAL NOT NULL,
+        days_since_last_activity INTEGER NOT NULL,
+        disbursement_amount REAL NOT NULL,
+        risk_score REAL NOT NULL,
+        at_risk INTEGER NOT NULL,
+        dedup_key TEXT UNIQUE,
+        ingested_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS quarantine (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        beneficiary_id TEXT,
+        pillar TEXT,
+        region TEXT,
+        milestone_status TEXT,
+        raw_json TEXT NOT NULL,
+        violations TEXT NOT NULL,
+        quarantined_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS simulator_state (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        running INTEGER NOT NULL DEFAULT 0,
+        speed REAL NOT NULL DEFAULT 1.0,
+        cursor INTEGER NOT NULL DEFAULT 0,
+        started_at TEXT
+    );
+
+    INSERT OR IGNORE INTO simulator_state (id, running, speed, cursor) VALUES (1, 0, 1.0, 0);
+
+    CREATE INDEX IF NOT EXISTS idx_events_pillar ON events(pillar);
+    CREATE INDEX IF NOT EXISTS idx_events_region ON events(region);
+    CREATE INDEX IF NOT EXISTS idx_events_at_risk ON events(at_risk);
+    """)
+    conn.commit()
+    conn.close()
+
+
+def now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def insert_event(conn, row: dict) -> bool:
+    """Insert a clean event. Returns False (no-op) if dedup_key already exists."""
+    with _lock:
+        try:
+            conn.execute(
+                """INSERT INTO events
+                   (beneficiary_id, beneficiary_token, pillar, region, application_date,
+                    milestone_status, attendance_pct, days_since_last_activity,
+                    disbursement_amount, risk_score, at_risk, dedup_key, ingested_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (row["beneficiary_id"], row["beneficiary_token"], row["pillar"], row["region"],
+                 row.get("application_date"), row["milestone_status"], row["attendance_pct"],
+                 row["days_since_last_activity"], row["disbursement_amount"], row["risk_score"],
+                 int(row["at_risk"]), row["dedup_key"], now_iso()),
+            )
+            conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False  # duplicate dedup_key
+
+
+def insert_quarantine(conn, raw: dict, violations: list):
+    with _lock:
+        import json
+        conn.execute(
+            """INSERT INTO quarantine (beneficiary_id, pillar, region, milestone_status, raw_json, violations, quarantined_at)
+               VALUES (?,?,?,?,?,?,?)""",
+            (raw.get("beneficiary_id"), raw.get("pillar"), raw.get("region"), raw.get("milestone_status"),
+             json.dumps(raw), ",".join(violations), now_iso()),
+        )
+        conn.commit()
+
+
+def get_recent_events(conn, limit=50):
+    rows = conn.execute("SELECT * FROM events ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_summary(conn):
+    total_events = conn.execute("SELECT COUNT(*) c FROM events").fetchone()["c"]
+    total_quarantined = conn.execute("SELECT COUNT(*) c FROM quarantine").fetchone()["c"]
+    total_seen = total_events + total_quarantined
+    pass_rate = round(100 * total_events / total_seen, 2) if total_seen else 0.0
+
+    active = conn.execute(
+        "SELECT COUNT(*) c FROM events WHERE milestone_status IN ('Active','Enrolled')"
+    ).fetchone()["c"]
+
+    at_risk = conn.execute("SELECT COUNT(*) c FROM events WHERE at_risk = 1").fetchone()["c"]
+
+    pillar_rows = conn.execute(
+        """SELECT pillar, COUNT(*) c FROM events
+           WHERE milestone_status IN ('Active','Enrolled') GROUP BY pillar"""
+    ).fetchall()
+    pillar_counts = {r["pillar"]: r["c"] for r in pillar_rows}
+
+    region_rows = conn.execute(
+        """SELECT region, pillar, COUNT(*) c FROM events
+           WHERE milestone_status IN ('Active','Enrolled')
+           GROUP BY region, pillar ORDER BY c DESC LIMIT 10"""
+    ).fetchall()
+    region_demand = [dict(r) for r in region_rows]
+
+    return {
+        "total_events": total_events,
+        "total_quarantined": total_quarantined,
+        "pass_rate_pct": pass_rate,
+        "active_beneficiaries": active,
+        "at_risk_count": at_risk,
+        "pillar_counts": pillar_counts,
+        "region_demand": region_demand,
+    }
+
+
+def get_at_risk(conn, limit=25):
+    rows = conn.execute(
+        """SELECT beneficiary_token, pillar, region, attendance_pct, days_since_last_activity, risk_score, ingested_at
+           FROM events WHERE at_risk = 1 ORDER BY risk_score DESC LIMIT ?""",
+        (limit,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_simulator_state(conn):
+    row = conn.execute("SELECT * FROM simulator_state WHERE id = 1").fetchone()
+    return dict(row)
+
+
+def set_simulator_state(conn, **kwargs):
+    with _lock:
+        fields = ", ".join(f"{k} = ?" for k in kwargs)
+        conn.execute(f"UPDATE simulator_state SET {fields} WHERE id = 1", tuple(kwargs.values()))
+        conn.commit()
