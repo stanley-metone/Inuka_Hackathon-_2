@@ -1,0 +1,80 @@
+Tests for pipeline.py (QA gates, dedup, tokenization) and db.py.
+Run with: pytest -v   (or, if pytest isn't installed, run this file directly:
+python tests/test_backend.py)
+"""
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import pipeline
+
+
+def test_clean_row_has_no_violations():
+    row = {"beneficiary_id": "BEN-1", "region": "Nairobi", "attendance_pct": 80, "disbursement_amount": 100}
+    assert pipeline.validate_row(row) == []
+
+
+def test_missing_beneficiary_id():
+    row = {"beneficiary_id": "", "region": "Nairobi", "attendance_pct": 80, "disbursement_amount": 100}
+    assert "missing_beneficiary_id" in pipeline.validate_row(row)
+
+
+def test_missing_region():
+    row = {"beneficiary_id": "BEN-1", "region": "", "attendance_pct": 80, "disbursement_amount": 100}
+    assert "missing_region" in pipeline.validate_row(row)
+
+
+def test_attendance_out_of_range():
+    row = {"beneficiary_id": "BEN-1", "region": "Nairobi", "attendance_pct": 143, "disbursement_amount": 100}
+    assert "attendance_out_of_range" in pipeline.validate_row(row)
+
+
+def test_negative_disbursement():
+    row = {"beneficiary_id": "BEN-1", "region": "Nairobi", "attendance_pct": 80, "disbursement_amount": -50}
+    assert "negative_disbursement" in pipeline.validate_row(row)
+
+
+def test_dedup_key_stable_for_identical_rows():
+    row = {"beneficiary_id": "BEN-1", "pillar": "Tech", "region": "Nairobi", "application_date": "2025-01-01",
+           "milestone_status": "Active", "attendance_pct": 80, "days_since_last_activity": 5, "disbursement_amount": 100}
+    assert pipeline.dedup_key(row) == pipeline.dedup_key(dict(row))
+
+
+def test_dedup_key_differs_for_different_rows():
+    row1 = {"beneficiary_id": "BEN-1", "pillar": "Tech", "region": "Nairobi", "application_date": "2025-01-01",
+            "milestone_status": "Active", "attendance_pct": 80, "days_since_last_activity": 5, "disbursement_amount": 100}
+    row2 = dict(row1); row2["beneficiary_id"] = "BEN-2"
+    assert pipeline.dedup_key(row1) != pipeline.dedup_key(row2)
+
+
+def test_tokenize_is_deterministic_and_not_reversible_looking():
+    t1 = pipeline.tokenize("BEN-00001")
+    t2 = pipeline.tokenize("BEN-00001")
+    assert t1 == t2
+    assert "BEN-00001" not in t1
+    assert t1.startswith("BEN-TOKEN-")
+
+
+def test_model_trains_and_meets_recall_target():
+    model = pipeline.DropoutModel()
+    metrics = model.train(seed=7)
+    assert metrics["recall_at_threshold"] >= 0.75, "Dropout recall target (>=75%) not met"
+    assert 0 <= metrics["roc_auc"] <= 1
+
+
+def test_model_scores_high_risk_higher_than_low_risk():
+    model = pipeline.DropoutModel()
+    model.train(seed=7)
+    low_risk = model.predict_risk(attendance_pct=95, days_since_last_activity=1)
+    high_risk = model.predict_risk(attendance_pct=20, days_since_last_activity=90)
+    assert high_risk > low_risk
+
+
+if __name__ == "__main__":
+    tests = [v for k, v in list(globals().items()) if k.startswith("test_")]
+    passed = 0
+    for t in tests:
+        t()
+        print("PASS:", t.__name__)
+        passed += 1
+    print(f"\n{passed}/{len(tests)} tests passed")
