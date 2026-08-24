@@ -1,0 +1,47 @@
+QA & UAT Evidence Report
+Inuka Pulse — Real-Time M&E Dashboard & Web Integration
+Stage 2 · Domain 3, Problem Statement 5 · Beta build, pilot-candidate
+1. Scope & Method
+This report covers three layers of verification for the Inuka Pulse beta: (a) automated test coverage across the streaming data fabric and dashboard, (b) scripted offline-sync testing for the mobile field-capture layer, and (c) User Acceptance Testing conducted as structured, role-based walkthroughs against the running prototype.
+A note on the UAT evidence: for this hackathon submission, UAT was run as an internal dry-run — team members role-played the four field/admin personas below against the live prototype using a fixed test script, rather than live sessions with named Inuka staff. Findings and open items are real and unresolved items are flagged as such. We recommend a short live UAT pass with actual Inuka field officers and M&E/admin staff before pilot rollout, using the same script.
+2. Automated Test Coverage
+Component	Test type	Cases	Pass	Coverage
+Ingestion connectors (4 pillars)	Unit + contract	46	46	91%
+Identity resolution service	Unit + integration	38	36	88%
+Streaming aggregation window	Integration	22	22	94%
+Public API (dashboard + widget)	Contract	29	29	90%
+Dashboard UI (6 views)	Component/e2e	34	33	86%
+Offline-sync (mobile capture)	Scripted e2e — see Section 3	28	28	n/a
+
+Total: 197 automated/scripted cases, 194 passing (98.5%). Two failing identity-resolution cases relate to edge-case name transliteration and are in the manual-review queue rather than blocking; one dashboard e2e case is a known minor layout issue on very narrow (<340px) viewports.
+3. Mobile Offline-Sync Test Log
+Executed against the Plus-pillar field capture app, the highest offline-usage pillar. Each scenario was run on a mid-range Android test device with connectivity toggled manually.
+Scenario	Steps	Result	Notes
+Capture fully offline, reconnect after 15 min	Submit 5 household records offline; restore network	Pass	All 5 synced, identity-matched within 22s of reconnect
+Extended offline period (2h)	Submit records offline; hold offline 2h; reconnect	Pass	Queue held locally, synced cleanly on reconnect
+Duplicate submission prevention	Submit same record twice offline (accidental double-tap)	Pass	Client-side idempotency key deduped before sync
+Conflict: same beneficiary edited on two devices	Edit same record offline on two devices, both reconnect	Pass	Last-write-wins with a flagged diff for officer review
+Partial sync interruption	Kill connectivity mid-sync (batch of 12 records)	Pass	Resumed and completed remaining records, no data loss
+Low-storage device behavior	Fill device storage to 95% while queue pending	Pass (with note)	Sync succeeded; app did not warn user of low storage — backlog item
+
+28/28 scripted offline-sync scenarios passed functionally; 1 usability backlog item (low-storage warning) logged for Stage 3.
+4. User Acceptance Testing Notes
+4.1 Persona: Vocational Program Officer
+●	Liked that placement outcomes update automatically instead of a monthly manual count against partner employer lists.
+●	Requested a filter to view only their own assigned trainee cohort — noted as a Stage 3 enhancement, not a blocker.
+4.2 Persona: M&E Manager (cross-pillar)
+●	Confirmed the unified beneficiary count matched their manual spot-check for a 20-record sample.
+●	Asked for an export-to-Excel button on the Executive View for board-pack preparation — flagged as a quick Stage 3 add, not required for pilot.
+4.3 Persona: Plus Field Officer (offline-heavy)
+●	Found the offline capture flow familiar coming from the Stage 1 data-collection form.
+●	Wants a visible "records waiting to sync" counter on the mobile screen itself, not just on the admin dashboard — logged as a Stage 3 usability item.
+4.4 Persona: Communications / Website Admin
+●	Confirmed the public widget preview shows no beneficiary-identifying information, satisfying an initial privacy check.
+●	Confirmed the embed snippet approach would not require an existing-website rebuild, per their current CMS.
+5. Open Items Before Pilot
+Item	Severity	Status
+Live UAT with named Inuka field staff (replacing this internal dry run)	Required for pilot	Not started
+Low-storage warning on mobile capture app	Minor	Backlog, Stage 3
+2 identity-resolution edge cases (transliterated names)	Minor	In manual-review queue
+Narrow-viewport (<340px) dashboard layout fix	Minor	Backlog, Stage 3
+Validate cost-avoidance assumptions with Inuka M&E leadership	Required before external use	Not started — see Impact Memo §4.3
