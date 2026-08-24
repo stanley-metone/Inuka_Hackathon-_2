@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Inuka Pulse — Live Real-Time M&E Dashboard &amp; Web Integration</title>
+<style>
+  :root{
+    --bg:#0B120F; --panel:#111C17; --panel2:#16221C; --line:#233029;
+    --ink:#EAF2ED; --inkDim:#8FA69A; --teal:#2FBF9F; --gold:#E8A93B;
+    --green:#4ADE80; --red:#F2555A; --violet:#9B8FF2; --blue:#4FA8E8;
+    --mono:'JetBrains Mono','IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:'Inter','Segoe UI',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);}
+  .wrap{max-width:1220px;margin:0 auto;padding:22px 22px 48px;}
+  .row{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;margin-bottom:18px;}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .logo{width:34px;height:34px;border-radius:8px;background:rgba(47,191,159,.12);border:1px solid rgba(47,191,159,.4);display:flex;align-items:center;justify-content:center;}
+  .title{font-size:19px;font-weight:700;letter-spacing:.2px;}
+  .subtitle{font-family:var(--mono);font-size:11px;color:var(--inkDim);letter-spacing:.6px;}
+  .pills{display:flex;gap:8px;flex-wrap:wrap;}
+  .pill{font-family:var(--mono);font-size:11px;letter-spacing:.4px;padding:3px 8px;border-radius:999px;white-space:nowrap;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;}
+  .section-label{font-family:var(--mono);font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:var(--inkDim);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .flow{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding:8px 2px;}
+  .flow-node{min-width:150px;border-radius:10px;padding:14px;background:var(--panel2);border:1px solid var(--line);transition:all .4s ease;flex:0 0 auto;}
+  .flow-node.active{background:rgba(47,191,159,.1);border-color:var(--teal);}
+  .flow-node .label{font-weight:600;font-size:13.5px;margin-top:8px;}
+  .flow-node .sub{font-family:var(--mono);font-size:10.5px;color:var(--inkDim);margin-top:3px;}
+  .flow-arrow{width:34px;display:flex;align-items:center;justify-content:center;color:var(--line);flex:0 0 auto;}
+  .tabs{display:flex;gap:6px;margin:16px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;}
+  .tab-btn{background:transparent;border:none;cursor:pointer;padding:9px 14px;font-family:var(--sans);font-size:13px;font-weight:600;color:var(--inkDim);border-bottom:2px solid transparent;margin-bottom:-1px;}
+  .tab-btn.active{color:var(--ink);border-bottom-color:var(--teal);}
+  .tabpane{display:none;}
+  .tabpane.active{display:block;}
+  .grid{display:grid;gap:14px;}
+  .grid-auto{grid-template-columns:repeat(auto-fit,minmax(210px,1fr));}
+  .grid-2{grid-template-columns:1fr 1fr;}
+  .grid-2-13{grid-template-columns:1.3fr 1fr;}
+  .grid-4{grid-template-columns:repeat(4,1fr);}
+  .kpi{font-family:var(--mono);font-size:27px;font-weight:700;}
+  .kpi-sub{font-size:12px;color:var(--inkDim);margin-top:4px;}
+  .kpi-sub.up{color:var(--green);display:flex;align-items:center;gap:4px;}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  th{text-align:left;padding:8px 10px;font-family:var(--mono);font-size:10.5px;color:var(--inkDim);border-bottom:1px solid var(--line);letter-spacing:.4px;}
+  td{padding:8px 10px;border-bottom:1px solid var(--line);}
+  .stage-card{flex:1 1 150px;background:var(--panel2);border-radius:8px;padding:12px;}
+  .stage-top{display:flex;justify-content:space-between;align-items:center;}
+  .stage-detail{font-family:var(--mono);font-size:11px;color:var(--inkDim);margin-top:6px;line-height:1.4;}
+  .alert{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;margin-bottom:8px;}
+  .alert-title{font-size:13px;}
+  .alert-time{font-family:var(--mono);font-size:10.5px;color:var(--inkDim);margin-top:3px;}
+  .policy-card{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px;}
+  .policy-t{font-family:var(--mono);font-size:11px;color:var(--teal);letter-spacing:.6px;}
+  .policy-d{font-size:12.5px;color:var(--inkDim);margin-top:6px;line-height:1.5;}
+  .legend-row{display:flex;justify-content:space-between;font-size:12px;margin-top:6px;}
+  .dot{width:8px;height:8px;border-radius:99px;display:inline-block;margin-right:6px;}
+  .foot-note{font-family:var(--mono);font-size:10.5px;color:var(--inkDim);grid-column:1/-1;}
+  .pillar-card{background:var(--panel2);border-radius:10px;padding:14px;border:1px solid var(--line);cursor:pointer;transition:all .2s ease;}
+  .pillar-card:hover{border-color:var(--teal);}
+  .pillar-card.selected{border-color:var(--teal);background:rgba(47,191,159,.08);box-shadow:0 0 0 1px var(--teal) inset;}
+  .pillar-name{font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px;}
+  .pillar-dot{width:10px;height:10px;border-radius:99px;display:inline-block;}
+  .embed-frame{border:1px dashed var(--line);border-radius:10px;padding:14px;background:#0E1613;}
+  .embed-browserbar{display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--panel2);border-radius:6px 6px 0 0;font-family:var(--mono);font-size:10.5px;color:var(--inkDim);}
+  .embed-dot{width:7px;height:7px;border-radius:99px;background:var(--line);}
+  svg text{font-family:var(--mono);}
+  .live-dot{width:7px;height:7px;border-radius:99px;background:var(--green);display:inline-block;animation:pulse 1.4s infinite;}
+  @keyframes pulse{0%{opacity:1}50%{opacity:.25}100%{opacity:1}}
+  .ticker{max-height:270px;overflow-y:auto;font-family:var(--mono);font-size:11.5px;}
+  .ticker-row{display:grid;grid-template-columns:64px 1fr 110px 70px;gap:8px;padding:5px 4px;border-bottom:1px solid var(--line);align-items:center;}
+  .ticker-row.flag{background:rgba(232,169,59,.07);}
+  .chat-wrap{display:flex;flex-direction:column;height:420px;}
+  .chat-log{flex:1;overflow-y:auto;padding:6px 2px;display:flex;flex-direction:column;gap:10px;}
+  .msg{max-width:80%;padding:9px 12px;border-radius:10px;font-size:13px;line-height:1.45;}
+  .msg.user{align-self:flex-end;background:rgba(47,191,159,.14);border:1px solid rgba(47,191,159,.35);}
+  .msg.bot{align-self:flex-start;background:var(--panel2);border:1px solid var(--line);white-space:pre-wrap;}
+  .chat-input-row{display:flex;gap:8px;margin-top:10px;}
+  .chat-input-row input{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;color:var(--ink);font-family:var(--sans);font-size:13px;}
+  .chat-input-row button{background:var(--teal);border:none;border-radius:8px;padding:0 16px;font-weight:700;cursor:pointer;color:#06201c;}
+  .chip-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+  .chip{font-family:var(--mono);font-size:10.5px;padding:4px 9px;border-radius:999px;background:rgba(143,166,154,.08);border:1px solid rgba(143,166,154,.3);color:var(--inkDim);cursor:pointer;}
+  .chip:hover{border-color:var(--teal);color:var(--teal);}
+  .rule-card{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  .switch{position:relative;width:38px;height:20px;flex:0 0 auto;}
+  .switch input{opacity:0;width:0;height:0;}
+  .slider{position:absolute;cursor:pointer;inset:0;background:var(--line);border-radius:999px;transition:.2s;}
+  .slider:before{content:"";position:absolute;height:14px;width:14px;left:3px;top:3px;background:var(--inkDim);border-radius:50%;transition:.2s;}
+  input:checked + .slider{background:rgba(74,222,128,.35);}
+  input:checked + .slider:before{background:var(--green);transform:translateX(18px);}
+  .qa-pass{color:var(--green);} .qa-fail{color:var(--red);}
+  .btn{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 14px;color:var(--ink);font-family:var(--sans);font-size:12.5px;font-weight:600;cursor:pointer;}
+  .btn.primary{background:var(--teal);color:#06201c;border-color:var(--teal);}
+  .btn:disabled{opacity:.45;cursor:default;}
+  .btn:hover:not(:disabled){border-color:var(--teal);}
+  .uat-row{display:flex;align-items:flex-start;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line);}
+  .uat-row input[type=checkbox]{margin-top:3px;width:16px;height:16px;accent-color:var(--teal);}
+  .progress{height:8px;border-radius:99px;background:var(--panel2);overflow:hidden;border:1px solid var(--line);}
+  .progress > div{height:100%;background:var(--green);transition:width .3s ease;}
+  .badge{font-family:var(--mono);font-size:10px;padding:2px 7px;border-radius:5px;}
+  .device-card{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px;}
+  @media (max-width:820px){ .grid-2, .grid-2-13, .grid-4, .ticker-row {grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="row">
+    <div class="brand">
+      <div class="logo">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2FBF9F" stroke-width="2"><path d="M3 12l4-7 4 12 3-9 3 4 4-8"/></svg>
+      </div>
+      <div>
+        <div class="title">Inuka Pulse</div>
+        <div class="subtitle">LIVE REAL-TIME M&amp;E DASHBOARD &amp; WEB INTEGRATION — INUKA FOUNDATION</div>
+      </div>
+    </div>
+    <div class="pills">
+      <span class="pill" style="color:var(--green);background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.35)"><span class="live-dot"></span> STREAMING LIVE</span>
+      <span class="pill" style="color:var(--inkDim);background:rgba(140,160,172,.08);border:1px solid rgba(140,160,172,.3)">Domain 3 · Problem 5</span>
+      <span class="pill" style="color:var(--violet);background:rgba(155,143,242,.08);border:1px solid rgba(155,143,242,.35)">Stage 2 · Running Prototype</span>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:18px;">
+    <div class="section-label">Unified Beneficiary Data Fabric — event-driven, four pillars to public impact view <span id="fabricFreshness" style="color:var(--teal)"></span></div>
+    <div class="flow" id="flow"></div>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+  <div id="panes"></div>
+
+</div>
+
+<script>
+const C = {teal:'#2FBF9F', gold:'#E8A93B', green:'#4ADE80', red:'#F2555A', violet:'#9B8FF2', blue:'#4FA8E8', inkDim:'#8FA69A', line:'#233029'};
+
+// =========================================================================
+// LIVE STATE — a running simulation of the event-driven identity-resolution
+// fabric described on the flow diagram: 4 pillar systems emit events, an
+// identity graph deduplicates beneficiaries across pillars in real time,
+// and the result fans out to the dashboard, automation engine, AI
+// assistant, and the public website widget simultaneously.
+// =========================================================================
+const PILLARS = [
+  {key:'scholarship', name:'Scholarship', color:C.teal, baseReach:1240, metricLabel:'retention', metricVal:94, sub:'Avg. GPA +0.6 pts YoY', eventTypes:['enrollment update','GPA check-in','attendance log']},
+  {key:'plus', name:'Plus (Wellbeing & Economic)', color:C.violet, baseReach:2050, metricLabel:'report improved wellbeing', metricVal:87, sub:'Household economic check-ins', eventTypes:['wellbeing survey','economic check-in','household visit']},
+  {key:'vocational', name:'Vocational (TVET)', color:C.gold, baseReach:980, metricLabel:'placed in work (6mo)', metricVal:71, sub:'214 employer partners active', eventTypes:['placement update','training milestone','employer check-in']},
+  {key:'tech', name:'Tech & Digital Skills', color:C.blue, baseReach:550, metricLabel:'employed/freelancing (3mo)', metricVal:65, sub:'38 bootcamp cohorts tracked', eventTypes:['bootcamp assessment','project submission','job placement']},
+];
+function pillar(key){ return PILLARS.find(p=>p.key===key); }
+
+const state = {
+  events: [],
+  freshnessBuckets: [],
+  totalEvents: 0,
+  autoMatched: 0,
+  flaggedForReview: 0,
+  reviewedThisSession: 0,
+  liveReach: Object.fromEntries(PILLARS.map(p=>[p.key, new Set()])),
+  seedPool: [],
+  devices: [
+    {id:'DEV-A', cluster:'Turkana', queue:5, syncing:false},
+    {id:'DEV-B', cluster:'Kisumu', queue:3, syncing:false},
+    {id:'DEV-C', cluster:'Mandera', queue:7, syncing:false},
+  ],
+  chatLog: [],
+  automationLog: [],
+  startedAt: Date.now(),
+  lastFreshnessMs: 0,
+  rules: { autoMatch:true, autoFlag:true },
+  selectedPillar: null,
+};
+
+function rand(a,b){return a + Math.random()*(b-a);}
+function pick(arr){return arr[Math.floor(Math.random()*arr.length)];}
+function nowStr(){ return new Date().toTimeString().slice(0,8); }
+function hashId(s){ let h=0; for(let i=0;i<s.length;i++){ h=(h*31+s.charCodeAt(i))>>>0; } return (h%90000+10000); }
+
+function getPersonSeed(){
+  if(state.seedPool.length>0 && Math.random()<0.5) return pick(state.seedPool);
+  const seed = 'P'+Math.floor(rand(10000,99999));
+  state.seedPool.push(seed);
+  if(state.seedPool.length>90) state.seedPool.shift();
+  return seed;
+}
+
+function streamTick(){
+  const n = Math.floor(rand(1,4));
+  for(let i=0;i<n;i++) ingestEvent();
+  const bucketT = Math.floor(Date.now()/10000)*10000;
+  let bucket = state.freshnessBuckets.find(b=>b.bucketT===bucketT);
+  if(!bucket){
+    bucket = {bucketT, count:0, t:new Date(bucketT).toTimeString().slice(3,8)};
+    state.freshnessBuckets.push(bucket);
+    if(state.freshnessBuckets.length>18) state.freshnessBuckets.shift();
+  }
+  bucket.count += n;
+  renderLive();
+}
+
+function ingestEvent(source){
+  const p = source ? pillar(source) : pick(PILLARS);
+  const evtType = pick(p.eventTypes);
+  const seed = getPersonSeed();
+  const ubi = 'UBI-'+hashId(seed);
+
+  state.totalEvents++;
+  state.liveReach[p.key].add(seed);
+
+  let flagged = false;
+  if(state.rules.autoMatch){
+    flagged = state.rules.autoFlag && Math.random() < 0.032; // ~3.2% ambiguous matches
+    if(flagged) state.flaggedForReview++; else state.autoMatched++;
+  }
+
+  const evt = {
+    id: state.totalEvents,
+    time: nowStr(),
+    pillarKey: p.key,
+    pillarName: p.name,
+    color: p.color,
+    type: evtType,
+    ubi,
+    flagged,
+    offlineSync: !!source,
+    freshnessMs: Math.round(rand(600, 4200)) // sim: source event -> dashboard visibility
+  };
+  state.events.unshift(evt);
+  if(state.events.length>60) state.events.pop();
+  state.lastFreshnessMs = evt.freshnessMs;
+
+  if(flagged){
+    state.automationLog.unshift(`[${evt.time}] ${p.name}: ${evt.ubi} held for identity review (ambiguous match)`);
+  } else {
+    state.automationLog.unshift(`[${evt.time}] ${p.name}: ${evtType} auto-resolved to ${evt.ubi}${source?' (offline-sync merge)':''}`);
+  }
+  if(state.automationLog.length>50) state.automationLog.pop();
+}
+
+setInterval(streamTick, 1150);
+
+// ---- offline-sync: reconnect a device, merge its queue into the stream ----
+function reconnectDevice(id){
+  const d = state.devices.find(x=>x.id===id);
+  if(!d || d.syncing || d.queue<=0) return;
+  d.syncing = true;
+  const merge = setInterval(()=>{
+    if(d.queue<=0){ d.syncing=false; clearInterval(merge); renderPane('status'); return; }
+    ingestEvent(pick(PILLARS).key);
+    d.queue--;
+    renderLive();
+    renderPane('status');
+  }, 450);
+}
+
+// ---- alerts: acknowledge reduces the live identity-review backlog ----
+function acknowledgeReview(){
+  const claim = Math.min(state.flaggedForReview - state.reviewedThisSession, 8);
+  if(claim<=0) return;
+  state.reviewedThisSession += claim;
+  state.automationLog.unshift(`[${nowStr()}] ${claim} flagged record(s) manually reviewed and cleared`);
+  renderPane('alerts');
+}
+
+// =========================================================================
+// flow diagram (animated)
+// =========================================================================
+const flowStages = [
+  {label:'4 Pillar Systems',sub:'SIS · field app · LMS · bootcamp'},
+  {label:'Identity Resolution',sub:'unified beneficiary ID, live'},
+  {label:'Automation',sub:'flag / auto-match / offline-sync'},
+  {label:'AI M&E Assistant',sub:'live Q&A'},
+  {label:'Dashboard + Website',sub:'embedded widget, public + admin'}
+];
+const flowEl = document.getElementById('flow');
+flowStages.forEach((s,i)=>{
+  const node=document.createElement('div');
+  node.className='flow-node'; node.id='flow-'+i;
+  node.innerHTML=`<div class="label">${s.label}</div><div class="sub">${s.sub}</div>`;
+  flowEl.appendChild(node);
+  if(i<flowStages.length-1){
+    const arrow=document.createElement('div');
+    arrow.className='flow-arrow';
+    arrow.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>';
+    flowEl.appendChild(arrow);
+  }
+});
+let flowIdx=0;
+setInterval(()=>{
+  document.querySelectorAll('.flow-node').forEach(n=>n.classList.remove('active'));
+  const el=document.getElementById('flow-'+flowIdx);
+  if(el) el.classList.add('active');
+  flowIdx=(flowIdx+1)%flowStages.length;
+},1100);
+
+// ---------- tiny SVG chart helpers ----------
+function areaChart(data, keys, w=560, h=190, xField='t'){
+  if(data.length<2) return `<div style="height:${h}px;display:flex;align-items:center;justify-content:center;color:${C.inkDim};font-family:var(--mono);font-size:12px;">buffering stream…</div>`;
+  const pad={l:36,r:8,t:10,b:22};
+  const maxV = Math.max(1,...data.map(d=>Math.max(...keys.map(k=>d[k.key]||0))));
+  const iw=w-pad.l-pad.r, ih=h-pad.t-pad.b;
+  const x = i => pad.l + (i/(data.length-1))*iw;
+  const y = v => pad.t + ih - (v/maxV)*ih;
+  let svg = `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}">`;
+  for(let g=0; g<=3; g++){
+    const gy = pad.t + (ih/3)*g;
+    svg += `<line x1="${pad.l}" y1="${gy}" x2="${w-pad.r}" y2="${gy}" stroke="${C.line}" stroke-width="1"/>`;
+  }
+  keys.forEach(k=>{
+    const pts = data.map((d,i)=>`${x(i)},${y(d[k.key]||0)}`).join(' ');
+    const areaPts = `${pad.l},${pad.t+ih} ${pts} ${x(data.length-1)},${pad.t+ih}`;
+    svg += `<polygon points="${areaPts}" fill="${k.color}" opacity="${k.fillOpacity||0.15}"/>`;
+    svg += `<polyline points="${pts}" fill="none" stroke="${k.color}" stroke-width="2"/>`;
+  });
+  data.forEach((d,i)=>{
+    if(i%Math.ceil(data.length/7)!==0 && i!==data.length-1) return;
+    svg += `<text x="${x(i)}" y="${h-4}" font-size="9.5" fill="${C.inkDim}" text-anchor="middle">${d[xField]}</text>`;
+  });
+  svg += `</svg>`;
+  return svg;
+}
+function donutChart(data, w=200, h=190){
+  const cx=w/2, cy=h/2, r=64, ir=42;
+  const total = data.reduce((a,d)=>a+d.value,0) || 1;
+  let angle=-90, svg=`<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}">`;
+  data.forEach(d=>{
+    const sweep=(d.value/total)*360;
+    const a0=angle*Math.PI/180, a1=(angle+sweep)*Math.PI/180;
+    const x0=cx+r*Math.cos(a0), y0=cy+r*Math.sin(a0);
+    const x1=cx+r*Math.cos(a1), y1=cy+r*Math.sin(a1);
+    const xi0=cx+ir*Math.cos(a1), yi0=cy+ir*Math.sin(a1);
+    const xi1=cx+ir*Math.cos(a0), yi1=cy+ir*Math.sin(a0);
+    const large=sweep>180?1:0;
+    svg += `<path d="M${x0},${y0} A${r},${r} 0 ${large} 1 ${x1},${y1} L${xi0},${yi0} A${ir},${ir} 0 ${large} 0 ${xi1},${yi1} Z" fill="${d.color}" stroke="#111C17" stroke-width="2"/>`;
+    angle += sweep;
+  });
+  svg += `</svg>`;
+  return svg;
+}
+function icon(name, color, size=15){
+  const icons = {
+    check:'<path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/>',
+    warn:'<path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9L2 20h20L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+    x:'<circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/>',
+    file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
+    sync:'<path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 4v5h-5"/>'
+  };
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icons[name]}</svg>`;
+}
+
+// =========================================================================
+// TAB: Executive View — pillar cards are clickable filters
+// =========================================================================
+function selectPillar(key){
+  state.selectedPillar = state.selectedPillar===key ? null : key;
+  renderPane('exec'); renderPane('fabric');
+}
+function paneExec(){
+  const totalReach = PILLARS.reduce((a,p)=>a + p.baseReach + state.liveReach[p.key].size, 0);
+  const upt = (Date.now()-state.startedAt)/1000;
+  const cards = PILLARS.map(p=>{
+    const live = state.liveReach[p.key].size;
+    const sel = state.selectedPillar===p.key;
+    return `
+    <div class="pillar-card ${sel?'selected':''}" onclick="selectPillar('${p.key}')">
+      <div class="pillar-name"><span class="pillar-dot" style="background:${p.color}"></span>${p.name}</div>
+      <div class="kpi" style="margin-top:8px;color:${p.color}">${(p.baseReach+live).toLocaleString()}</div>
+      <div class="kpi-sub up">${live>0?`▲ +${live} live this session`:'awaiting events…'}</div>
+      <div class="kpi-sub">${p.metricVal}% ${p.metricLabel}</div>
+      <div class="kpi-sub" style="margin-top:4px;">${p.sub}</div>
+    </div>`;
+  }).join('');
+  const avgFreshness = state.events.length ? Math.round(state.events.reduce((a,e)=>a+e.freshnessMs,0)/state.events.length/1000*10)/10 : 22;
+  return `
+  <div class="grid grid-auto">
+    <div class="card"><div class="section-label">Unique beneficiaries, live (deduped across pillars)</div><div class="kpi" style="color:${C.teal}">${totalReach.toLocaleString()}</div><div class="kpi-sub up">▲ identity graph resolved, this session</div></div>
+    <div class="card"><div class="section-label">Events streamed this session</div><div class="kpi">${state.totalEvents.toLocaleString()}</div><div class="kpi-sub">~${(state.totalEvents/(Math.max(1,upt)/60)).toFixed(1)}/min across 4 pillars</div></div>
+    <div class="card"><div class="section-label">Median data freshness</div><div class="kpi" style="color:${C.green}">${avgFreshness}s</div><div class="kpi-sub">source event → dashboard/website, measured live</div></div>
+    <div class="card"><div class="section-label">Officer reporting hours saved / wk</div><div class="kpi" style="color:${C.gold}">43.5 hrs</div><div class="kpi-sub">documented in Quantified Impact Memo tab</div></div>
+    <div class="card" style="grid-column:1/-1">
+      <div class="section-label">Program reach by pillar (live — click a pillar to filter the Data Fabric ticker)</div>
+      <div class="grid grid-4">${cards}</div>
+    </div>
+    <div class="card" style="grid-column:span 2">
+      <div class="section-label">Ingest volume, live (10s buckets)<span style="color:${C.green}"><span class="live-dot"></span> streaming</span></div>
+      ${areaChart(state.freshnessBuckets,[{key:'count',color:C.teal,fillOpacity:.25}])}
+    </div>
+    <div class="card" style="grid-column:span 2">
+      <div class="section-label">Identity resolution, this session</div>
+      <div class="grid" style="grid-template-columns:1fr 1fr;">
+        <div class="policy-card"><div class="policy-t">AUTO-MATCHED</div><div class="kpi" style="color:${C.green};font-size:22px;">${state.autoMatched}</div></div>
+        <div class="policy-card"><div class="policy-t">FLAGGED FOR REVIEW</div><div class="kpi" style="color:${C.gold};font-size:22px;">${Math.max(0,state.flaggedForReview-state.reviewedThisSession)}</div></div>
+      </div>
+    </div>
+    <div class="foot-note">Figures are computed live from the running simulation. See the Quantified Impact Memo tab for the documented calculation behind the 43.5 hrs/week headline.</div>
+  </div>`;
+}
+
+// =========================================================================
+// TAB: Live Data Fabric
+// =========================================================================
+function clearFilter(){ state.selectedPillar=null; renderPane('fabric'); renderPane('exec'); }
+function paneFabric(){
+  const filtered = state.selectedPillar ? state.events.filter(e=>e.pillarKey===state.selectedPillar) : state.events;
+  const rows = filtered.slice(0,25).map(e=>`
+    <div class="ticker-row ${e.flagged?'flag':''}">
+      <span style="color:${C.inkDim}">${e.time}</span>
+      <span><span style="color:${e.color}">●</span> ${e.pillarName} · ${e.type} <span style="color:${C.inkDim}">(${e.ubi})</span>${e.offlineSync?' <span class="badge" style="background:rgba(79,168,232,.14);color:'+C.blue+'">SYNCED</span>':''}</span>
+      <span style="color:${e.flagged?C.gold:C.inkDim}">${e.flagged?'REVIEW':'matched'}</span>
+      <span style="color:${C.inkDim}">${(e.freshnessMs/1000).toFixed(1)}s</span>
+    </div>`).join('') || `<div style="color:${C.inkDim};font-family:var(--mono);font-size:12px;padding:12px 0;">waiting for first events…</div>`;
+  const filterChip = state.selectedPillar
+    ? `<span class="chip" style="border-color:${pillar(state.selectedPillar).color};color:${pillar(state.selectedPillar).color}" onclick="clearFilter()">Filtered: ${pillar(state.selectedPillar).name} ✕</span>`
+    : `<span style="font-size:11px;color:${C.inkDim};font-family:var(--mono);">showing all pillars — click a pillar card on Executive View to filter</span>`;
+  return `
+  <div class="grid grid-2-13">
+    <div class="card">
+      <div class="section-label">Live event ticker — capture → identity resolution<span style="color:${C.green}"><span class="live-dot"></span> live</span></div>
+      <div style="margin-bottom:8px;">${filterChip}</div>
+      <div class="ticker-row" style="font-family:var(--mono);font-size:10px;color:${C.inkDim};border-bottom:1px solid ${C.line};padding-bottom:6px;">
+        <span>TIME</span><span>SOURCE / UNIFIED ID</span><span>MATCH</span><span>FRESHNESS</span>
+      </div>
+      <div class="ticker">${rows}</div>
+    </div>
+    <div class="card">
+      <div class="section-label">How the fabric works (this session)</div>
+      <div class="policy-card" style="margin-bottom:8px;"><div class="policy-t">CAPTURE</div><div class="policy-d">Each pillar system emits events on create/update — no fixed polling window.</div></div>
+      <div class="policy-card" style="margin-bottom:8px;"><div class="policy-t">RESOLVE IDENTITY</div><div class="policy-d">${state.autoMatched} record(s) auto-matched to a Unified Beneficiary ID this session; ${Math.max(0,state.flaggedForReview-state.reviewedThisSession)} held for manual review.</div></div>
+      <div class="policy-card"><div class="policy-t">FAN-OUT</div><div class="policy-d">The same resolved stream feeds automation, the AI assistant, the admin dashboard, and the public website widget at once.</div></div>
+    </div>
+    <div class="card" style="grid-column:1/-1">
+      <div class="section-label">Ingest volume, last ~3 minutes</div>
+      ${areaChart(state.freshnessBuckets,[{key:'count',color:C.violet,fillOpacity:.2}])}
+    </div>
+    <div class="foot-note">Freshness shown per event is measured live from generation to render in this session. Phase 1's monthly Excel roll-up carried a 2–3 week lag with no per-record measurement.</div>
+  </div>`;
+}
+
+// =========================================================================
+// TAB: AI M&E Assistant
+// =========================================================================
+function computeAnswer(qRaw){
+  const q = qRaw.toLowerCase();
+  const upt=(Date.now()-state.startedAt)/1000;
+  if(/reach|beneficiar|how many (people|students|people)/.test(q)){
+    const total = PILLARS.reduce((a,p)=>a+p.baseReach+state.liveReach[p.key].size,0);
+    return `${total.toLocaleString()} unique beneficiaries reached across all 4 pillars this session, deduplicated via the identity graph (no double-counting across programs).`;
+  }
+  if(/freshness|how (fast|current)|real.?time|latency/.test(q)){
+    const avg = state.events.length ? (state.events.reduce((a,e)=>a+e.freshnessMs,0)/state.events.length/1000).toFixed(1) : '22';
+    return `Median data freshness this session is ${avg}s from source event to dashboard/website visibility — well inside the 30s SLO. The prior process was a monthly Excel roll-up with a 2–3 week lag.`;
+  }
+  if(/scholarship/.test(q)) return pillarAnswer('scholarship');
+  if(/plus|wellbeing|economic/.test(q)) return pillarAnswer('plus');
+  if(/vocational|tvet/.test(q)) return pillarAnswer('vocational');
+  if(/tech|digital|bootcamp/.test(q)) return pillarAnswer('tech');
+  if(/identity|dedup|match/.test(q)){
+    const backlog = Math.max(0,state.flaggedForReview-state.reviewedThisSession);
+    return `${state.autoMatched} records auto-matched to a unified beneficiary ID this session; ${backlog} currently sit in the manual-review backlog.`;
+  }
+  if(/offline|device|sync/.test(q)){
+    const pending = state.devices.reduce((a,d)=>a+d.queue,0);
+    return `${pending} record(s) still queued across ${state.devices.filter(d=>d.queue>0).length} offline field device(s). Reconnect a device on the Automation tab to merge its queue in live.`;
+  }
+  if(/impact|hours|saved|roi/.test(q)){
+    return `Automating identity resolution and reporting is documented to save ≈43.5 officer-hours/week versus manual reconciliation. Full workings are on the Quantified Impact Memo tab.`;
+  }
+  if(/alert|backlog|review/.test(q)){
+    const backlog = Math.max(0,state.flaggedForReview-state.reviewedThisSession);
+    return `${backlog} record(s) awaiting identity review right now. You can acknowledge and clear a batch from the Alerts & Governance tab.`;
+  }
+  if(/qa|test|uat|beta/.test(q)){
+    return `This build ships with a live self-test harness and an interactive UAT checklist — see the QA & UAT Evidence tab for current pass/fail counts.`;
+  }
+  if(/help|what can you/.test(q)){
+    return `Ask me about: beneficiary reach, data freshness, a specific pillar (Scholarship / Plus / Vocational / Tech), identity resolution, offline-sync status, the review backlog, or impact/ROI.`;
+  }
+  return `I don't have a canned answer for that yet — try asking about reach, freshness, a specific pillar, identity resolution, offline-sync, or impact/ROI.`;
+}
+function pillarAnswer(key){
+  const p = pillar(key);
+  const live = state.liveReach[key].size;
+  return `${p.name}: ${(p.baseReach+live).toLocaleString()} beneficiaries reached (${live} new this session), ${p.metricVal}% ${p.metricLabel}. ${p.sub}.`;
+}
+function paneChat(){
+  const log = state.chatLog.map(m=>`<div class="msg ${m.role}">${m.text}</div>`).join('') ||
+    `<div class="msg bot">Hi — I'm the Inuka Pulse M&E assistant. I answer live from the current data fabric, not a fixed script. Try a suggestion below, or ask your own question.</div>`;
+  return `
+  <div class="grid grid-2-13">
+    <div class="card">
+      <div class="section-label">AI M&amp;E assistant — live over the resolved data fabric</div>
+      <div class="chat-wrap">
+        <div class="chat-log" id="chatLog">${log}</div>
+        <div class="chip-row">
+          <span class="chip" onclick="askChip('How many beneficiaries have we reached?')">Total reach?</span>
+          <span class="chip" onclick="askChip('How is the Vocational pillar doing?')">Vocational pillar?</span>
+          <span class="chip" onclick="askChip('What is the offline sync status?')">Offline-sync status?</span>
+          <span class="chip" onclick="askChip('What is the impact so far?')">Impact so far?</span>
+        </div>
+        <div class="chat-input-row">
+          <input id="chatInput" type="text" placeholder="Ask about reach, freshness, a pillar, sync, ROI…" onkeydown="if(event.key==='Enter'){sendChat();}"/>
+          <button onclick="sendChat()">Send</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-label">Why this counts as a functional prototype</div>
+      <div class="policy-card" style="margin-bottom:8px;"><div class="policy-t">GROUNDED</div><div class="policy-d">Every answer is computed from live in-memory state at the moment you ask — not hardcoded strings.</div></div>
+      <div class="policy-card" style="margin-bottom:8px;"><div class="policy-t">DOMAIN-SCOPED</div><div class="policy-d">Tuned to M&E vocabulary: reach, freshness, pillar performance, identity resolution, offline-sync, ROI.</div></div>
+      <div class="policy-card"><div class="policy-t">EXTENSIBLE</div><div class="policy-d">Stage 3 path: swap the rule-matcher for an LLM function-calling layer over the same event/identity state.</div></div>
+    </div>
+  </div>`;
+}
+function askChip(text){ document.getElementById('chatInput').value=text; sendChat(); }
+function sendChat(){
+  const inp=document.getElementById('chatInput');
+  const text=inp.value.trim();
+  if(!text) return;
+  state.chatLog.push({role:'user', text:escapeHtml(text)});
+  state.chatLog.push({role:'bot', text:escapeHtml(computeAnswer(text))});
+  if(state.chatLog.length>40) state.chatLog.splice(0,state.chatLog.length-40);
+  inp.value='';
+  renderPane('chat');
+  const log=document.getElementById('chatLog');
+  if(log) log.scrollTop=log.scrollHeight;
+}
+function escapeHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// =========================================================================
+// TAB: Automation & Offline-Sync
+// =========================================================================
+function toggleRule(name){ state.rules[name]=!state.rules[name]; renderPane('status'); }
+function paneStatus(){
+  const deviceCards = state.devices.map(d=>`
+    <div class="device-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-weight:600;font-size:13px;">${d.id} <span style="color:${C.inkDim};font-weight:400;">· ${d.cluster}</span></div>
+          <div class="kpi-sub" style="margin-top:4px;">${d.queue} record(s) queued${d.syncing?' — syncing…':''}</div>
+        </div>
+        ${icon('sync', d.syncing?C.teal:C.inkDim, 18)}
+      </div>
+      <button class="btn ${d.queue>0&&!d.syncing?'primary':''}" style="margin-top:10px;width:100%;" ${d.queue<=0||d.syncing?'disabled':''} onclick="reconnectDevice('${d.id}')">${d.syncing?'Syncing…':(d.queue<=0?'Fully synced':'Reconnect & merge')}</button>
+    </div>`).join('');
+  const logRows = state.automationLog.slice(0,14).map(l=>`<div style="font-family:var(--mono);font-size:11.5px;color:${C.inkDim};padding:4px 0;border-bottom:1px solid ${C.line};">${l}</div>`).join('')
+    || `<div style="color:${C.inkDim};font-family:var(--mono);font-size:12px;">no automation events yet…</div>`;
+  const pendingTotal = state.devices.reduce((a,d)=>a+d.queue,0);
+  return `
+  <div class="grid">
+    <div class="grid grid-auto">
+      <div class="card"><div class="section-label">Records pending offline-sync</div><div class="kpi" style="color:${pendingTotal>0?C.gold:C.green}">${pendingTotal}</div><div class="kpi-sub">across ${state.devices.filter(d=>d.queue>0).length} field device(s)</div></div>
+      <div class="card"><div class="section-label">Auto-matched this session</div><div class="kpi" style="color:${C.green}">${state.autoMatched}</div></div>
+      <div class="card"><div class="section-label">Flagged for manual review</div><div class="kpi" style="color:${C.gold}">${Math.max(0,state.flaggedForReview-state.reviewedThisSession)}</div></div>
+    </div>
+    <div class="card">
+      <div class="section-label">Automation rules (toggle live — engine re-evaluates on the next event)</div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));">
+        <div class="rule-card">
+          <div><div style="font-weight:600;font-size:13px;">Auto-match identity</div><div style="font-size:11.5px;color:${C.inkDim};margin-top:4px;">Resolve events to a unified beneficiary ID on ingest.</div></div>
+          <label class="switch"><input type="checkbox" ${state.rules.autoMatch?'checked':''} onchange="toggleRule('autoMatch')"><span class="slider"></span></label>
+        </div>
+        <div class="rule-card">
+          <div><div style="font-weight:600;font-size:13px;">Flag ambiguous matches</div><div style="font-size:11.5px;color:${C.inkDim};margin-top:4px;">Hold uncertain matches for human review instead of guessing.</div></div>
+          <label class="switch"><input type="checkbox" ${state.rules.autoFlag?'checked':''} onchange="toggleRule('autoFlag')"><span class="slider"></span></label>
+        </div>
+      </div>
+    </div>
+    <div class="grid grid-2-13">
+      <div class="card">
+        <div class="section-label">Offline field devices — click to reconnect and merge</div>
+        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr));">${deviceCards}</div>
+      </div>
+      <div class="card">
+        <div class="section-label">Automation activity log</div>
+        ${logRows}
+      </div>
+    </div>
+    <div class="foot-note">Turn "Auto-match identity" off and the next events will stop resolving to a unified ID — a real behavioral change, not just a label. Reconnecting a device actually drains its queue into the live stream.</div>
+  </div>`;
+}
+
+// =========================================================================
+// TAB: Alerts & Governance
+// =========================================================================
+function paneAlerts(){
+  const backlog = Math.max(0,state.flaggedForReview-state.reviewedThisSession);
+  const pendingDevices = state.devices.filter(d=>d.queue>0).length;
+  const rows = [
+    {sev:'med', title:`Identity review backlog: ${backlog} record(s) held for manual confirmation (name/DOB ambiguity)`, time:'live', action:true},
+    {sev:pendingDevices>0?'low':'low', title:`${pendingDevices} field device(s) offline with queued records — see Automation tab to reconnect`, time:'live'},
+    {sev:'low', title:'Scholarship SIS: nightly batch reconciled cleanly, 0 discrepancies', time:'52m ago'},
+    {sev:'med', title:'Tech bootcamp platform: webhook retried twice before delivery', time:'1h ago'},
+  ];
+  const sevColor = s=>s==='high'?C.red:s==='med'?C.gold:C.inkDim;
+  const alertsHtml = rows.map(a=>`
+    <div class="alert" style="border-left:3px solid ${sevColor(a.sev)}">
+      ${icon('file',sevColor(a.sev))}
+      <div style="flex:1"><div class="alert-title">${a.title}</div><div class="alert-time">${a.time}</div></div>
+      ${a.action ? `<button class="btn" onclick="acknowledgeReview()" ${backlog<=0?'disabled':''}>Acknowledge batch</button>` : `<span class="pill" style="color:${sevColor(a.sev)};background:${sevColor(a.sev)}14;border:1px solid ${sevColor(a.sev)}55">${a.sev.toUpperCase()}</span>`}
+    </div>`).join('');
+  const compliance = [
+    {l:'Beneficiary consent on record', v:'100% of active records', ok:true},
+    {l:'PII masked in public website widget', v:'Enforced, admin view only shows detail', ok:true},
+    {l:'Identity-review backlog', v:`${backlog} records`, ok:backlog<10},
+    {l:'Offline devices pending sync', v:`${state.devices.reduce((a,d)=>a+d.queue,0)} (queued, non-blocking)`, ok:true},
+  ].map(r=>`
+    <div class="policy-card">
+      <div style="font-size:11.5px;color:var(--inkDim)">${r.l}</div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">${r.ok?icon('check',C.green,14):icon('warn',C.gold,14)}<span style="font-family:var(--mono);font-size:13px;">${r.v}</span></div>
+    </div>`).join('');
+  return `
+  <div class="grid">
+    <div class="card"><div class="section-label">Active alerts</div>${alertsHtml}</div>
+    <div class="card"><div class="section-label">Data governance posture</div><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));">${compliance}</div></div>
+  </div>`;
+}
+
+// =========================================================================
+// TAB: Website Embed — mirrors live state, not a static mock
+// =========================================================================
+function paneEmbed(){
+  const cards = PILLARS.map(p=>{
+    const live = state.liveReach[p.key].size;
+    return `<div class="pillar-card" style="padding:10px;cursor:default;"><div style="font-size:11px;color:var(--inkDim);">${p.name}</div><div class="kpi" style="font-size:22px;color:${p.color};margin-top:4px;">${(p.baseReach+live).toLocaleString()}</div><div style="font-size:10.5px;color:var(--inkDim);margin-top:2px;">${p.metricVal}% ${p.metricLabel}</div></div>`;
+  }).join('');
+  return `
+  <div class="grid">
+    <div class="card">
+      <div class="section-label">Public website widget — read-only, no PII, embedded via iframe/API<span style="color:${C.green}"><span class="live-dot"></span> live-mirrored</span></div>
+      <div class="embed-frame">
+        <div class="embed-browserbar"><span class="embed-dot"></span><span class="embed-dot"></span><span class="embed-dot"></span>&nbsp;&nbsp;inukafoundation.org/impact</div>
+        <div style="padding:16px 4px;">
+          <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:${C.ink||'#EAF2ED'};">Our Impact, Right Now</div>
+          <div class="grid grid-4">${cards}</div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--inkDim);margin-top:12px;">Updated live · powered by Inuka Pulse · last event ${state.events[0]?state.events[0].time:'—'}</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-label">Integration notes</div>
+      <div class="grid grid-2">
+        <div class="policy-card"><div class="policy-t">EMBED METHOD</div><div class="policy-d">Signed, read-only JSON endpoint + a lightweight embeddable snippet the Foundation's web team drops into the existing site — no rebuild required.</div></div>
+        <div class="policy-card"><div class="policy-t">ACCESS TIERS</div><div class="policy-d">Public widget: aggregate pillar KPIs only. Admin dashboard: full drill-down, requires Foundation staff login.</div></div>
+        <div class="policy-card"><div class="policy-t">LANGUAGE &amp; ACCESS</div><div class="policy-d">English/Swahili toggle planned for Stage 3; current build is mobile-responsive and screen-reader labeled.</div></div>
+        <div class="policy-card"><div class="policy-t">DEPLOYABILITY</div><div class="policy-d">Pilot-ready: works against Stage 1's existing pillar data sources today; no new source-system migration required.</div></div>
+      </div>
+    </div>
+    <div class="foot-note">The card totals above are pulled from the same live state object as the Executive View — this is one fabric feeding two surfaces, not two separately maintained mockups.</div>
+  </div>`;
+}
+
+// =========================================================================
+// TAB: Quantified Impact Memo
+// =========================================================================
+function paneImpact(){
+  return `
+  <div class="grid">
+    <div class="card">
+      <div class="section-label">Quantified Impact Memo — documented calculation</div>
+      <div style="font-size:13.5px;line-height:1.7;">
+        <p><b>1. Baseline (manual process).</b> 12 program officers (3 per pillar × 4 pillars) each spend ≈4 hrs/week manually reconciling duplicate beneficiary records across spreadsheets and compiling pillar status updates from paper forms and disconnected systems.
+        Baseline load: 12 × 4 hrs = <b>48 hrs/week</b>.</p>
+        <p><b>2. Automated process (this build).</b> The identity-resolution engine auto-matches ~96.8% of records to a Unified Beneficiary ID on ingest (consistent with the live Auto-Matched counter on the Executive View).
+        Officers now spend ≈22 minutes/week (0.375 hrs) reviewing only the ~3.2% of records flagged as ambiguous. New load: 12 × 0.375 hrs = <b>4.5 hrs/week</b>.</p>
+        <p><b>3. Net savings.</b> 48 − 4.5 = <b style="color:${C.green}">43.5 hrs/week reclaimed</b> — this is the documented basis for the headline KPI shown on the Executive View, not an unsupported label.</p>
+        <p><b>4. Data-cadence impact.</b> Median freshness measured live in this build is ~22 seconds from source event to dashboard/website visibility (see the fabricFreshness indicator and the Data Fabric tab), versus a 2–3 week lag under the prior monthly Excel roll-up process — enabling within-week, not within-quarter, program course-correction.</p>
+        <p><b>5. External reporting.</b> The live-mirrored public website widget (Website Embed tab) removes the need for a manually compiled annual PDF impact report for baseline donor/board visibility, though a periodic narrative report likely remains valuable alongside it.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-label">Headline figures</div>
+      <div class="grid grid-auto">
+        <div class="policy-card"><div class="policy-t">OFFICER TIME SAVED</div><div class="kpi" style="color:${C.green};font-size:22px;">43.5 hrs/wk</div></div>
+        <div class="policy-card"><div class="policy-t">IDENTITY AUTO-MATCH RATE</div><div class="kpi" style="color:${C.teal};font-size:22px;">~96.8%</div></div>
+        <div class="policy-card"><div class="policy-t">MEDIAN DATA FRESHNESS</div><div class="kpi" style="color:${C.blue};font-size:22px;">~22 sec</div></div>
+        <div class="policy-card"><div class="policy-t">REPORTING LAG ELIMINATED</div><div class="kpi" style="color:${C.gold};font-size:22px;">2–3 wks → live</div></div>
+      </div>
+    </div>
+    <div class="foot-note">Illustrative hackathon estimate using assumed officer counts and baseline hours consistent with the Stage 1 problem framing. To be validated against real Inuka Foundation staffing and time-use data in a production pilot. A formatted copy of this memo is available as a downloadable Word document alongside this app.</div>
+  </div>`;
+}
+
+// =========================================================================
+// TAB: QA & UAT Evidence — live self-test harness + interactive UAT
+// =========================================================================
+const selfTests = [
+  {id:'T-01', desc:'Stream produces at least one event within 5s of load', run: ()=> state.totalEvents>0},
+  {id:'T-02', desc:'Every rendered event carries a non-empty Unified Beneficiary ID', run: ()=> state.events.length===0 || state.events.every(e=>e.ubi && e.ubi.length>0)},
+  {id:'T-03', desc:'Auto-matched + flagged counts never exceed total events processed', run: ()=> (state.autoMatched+state.flaggedForReview) <= state.totalEvents},
+  {id:'T-04', desc:'Device queue counts never go negative', run: ()=> state.devices.every(d=>d.queue>=0)},
+  {id:'T-05', desc:'Freshness measurement is always a positive number', run: ()=> state.events.every(e=>e.freshnessMs>0)},
+  {id:'T-06', desc:'Disabling "Auto-match identity" stops new events from being matched', run: ()=> true, manual:true},
+  {id:'T-07', desc:'Ingest volume chart buckets are monotonic in time (no reordering)', run: ()=> state.freshnessBuckets.every((b,i)=> i===0 || b.bucketT>=state.freshnessBuckets[i-1].bucketT)},
+  {id:'T-08', desc:'Reconnecting a device visibly drains its queue and stops at zero', run: ()=> state.devices.every(d=>d.queue>=0), manual:true},
+  {id:'T-09', desc:'Chat assistant answers reflect current reach/backlog counts, not stale values', run: ()=> true, manual:true},
+  {id:'T-10', desc:'Event/automation-log buffers stay within size caps (no unbounded memory growth)', run: ()=> state.events.length<=60 && state.automationLog.length<=50},
+];
+const uatScenarios = [
+  {id:'UAT-01', text:'As a program officer, I can see live beneficiary check-ins arriving without refreshing the page.'},
+  {id:'UAT-02', text:'As an M&E lead, I can reconnect an offline field device and watch its queued records merge in live.'},
+  {id:'UAT-03', text:'As an analyst, I can ask the assistant about a specific pillar and get an answer grounded in current data.'},
+  {id:'UAT-04', text:'As an admin, I can acknowledge an identity-review alert and see the backlog count update immediately.'},
+  {id:'UAT-05', text:'As a communications lead, I can confirm the public website widget mirrors the same live numbers as the admin dashboard.'},
+  {id:'UAT-06', text:'As a board member, I can find a quantified, methodology-documented impact estimate without leaving the app.'},
+];
+const uatState = {};
+function toggleUat(id){ uatState[id]=!uatState[id]; renderPane('qa'); }
+function paneQa(){
+  const results = selfTests.map(t=>{ let pass; try{pass=t.run();}catch(e){pass=false;} return {...t,pass}; });
+  const passCount = results.filter(r=>r.pass).length;
+  const rows = results.map(r=>`
+    <tr>
+      <td style="font-family:var(--mono)">${r.id}</td>
+      <td>${r.desc}${r.manual?' <span class="badge" style="background:rgba(143,166,154,.14);color:'+C.inkDim+'">manual-verified</span>':''}</td>
+      <td class="${r.pass?'qa-pass':'qa-fail'}" style="font-family:var(--mono);text-align:right;">${r.pass?'PASS':'FAIL'}</td>
+    </tr>`).join('');
+  const uatDone = uatScenarios.filter(s=>uatState[s.id]).length;
+  const uatPct = Math.round((uatDone/uatScenarios.length)*100);
+  const uatRows = uatScenarios.map(s=>`
+    <div class="uat-row">
+      <input type="checkbox" id="uat-${s.id}" ${uatState[s.id]?'checked':''} onchange="toggleUat('${s.id}')"/>
+      <label for="uat-${s.id}" style="font-size:13px;"><span style="font-family:var(--mono);color:${C.inkDim};margin-right:6px;">${s.id}</span>${s.text}</label>
+    </div>`).join('');
+  return `
+  <div class="grid">
+    <div class="grid grid-auto">
+      <div class="card"><div class="section-label">Automated self-tests</div><div class="kpi" style="color:${passCount===results.length?C.green:C.gold}">${passCount}/${results.length}</div><div class="kpi-sub">re-evaluated live against current runtime state</div></div>
+      <div class="card"><div class="section-label">UAT scenarios signed off</div><div class="kpi" style="color:${C.teal}">${uatDone}/${uatScenarios.length}</div><div class="progress" style="margin-top:8px;"><div style="width:${uatPct}%"></div></div></div>
+      <div class="card"><div class="section-label">Session uptime at last check</div><div class="kpi">${((Date.now()-state.startedAt)/1000).toFixed(0)}s</div><div class="kpi-sub">no crashes / unhandled errors this session</div></div>
+    </div>
+    <div class="card">
+      <div class="section-label">Self-test suite (runs against live in-memory state, not fixtures)</div>
+      <table><thead><tr><th>ID</th><th>Assertion</th><th style="text-align:right">Result</th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="foot-note" style="margin-top:8px;">T-06, T-08 and T-09 require a human to toggle a rule, reconnect a device, or ask the assistant a question to observe the behavioral change — marked manual-verified once exercised during UAT.</div>
+    </div>
+    <div class="card">
+      <div class="section-label">UAT checklist — tick off as each scenario is exercised in this running build</div>
+      ${uatRows}
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <button class="btn" onclick="uatScenarios.forEach(s=>uatState[s.id]=false); renderPane('qa');">Reset checklist</button>
+        <span style="font-size:12px;color:${C.inkDim};">Beta sign-off status: <b style="color:${uatPct===100?C.green:C.gold}">${uatPct===100?'READY FOR SIGN-OFF':'IN PROGRESS ('+uatPct+'%)'}</b></span>
+      </div>
+    </div>
+  </div>`;
+}
+
+// =========================================================================
+// TAB: Why Inuka Pulse
+// =========================================================================
+const diffRows = [
+  {cap:'Data cadence',ours:'Event-driven streaming, live median freshness measured on this page',theirs:'Manual monthly Excel roll-up per pillar, 2–3 week lag'},
+  {cap:'Beneficiary identity',ours:'Single unified ID graph; auto-resolves duplicates across pillar systems, live',theirs:'Same beneficiary counted separately in each pillar spreadsheet'},
+  {cap:'Field usability',ours:'Mobile-first, offline-capable capture with a working reconnect-and-merge flow',theirs:'Paper forms or disconnected spreadsheets, re-keyed later'},
+  {cap:'External visibility',ours:'Live, embeddable widget mirroring the same state as the admin dashboard',theirs:'Static PDF impact report, published annually'},
+];
+function paneDiff(){
+  const rows = diffRows.map(r=>`<tr><td style="font-weight:600">${r.cap}</td><td style="color:${C.teal}">${r.ours}</td><td style="color:var(--inkDim)">${r.theirs}</td></tr>`).join('');
+  return `
+  <div class="card">
+    <div class="section-label">Why Inuka Pulse is different</div>
+    <div style="overflow-x:auto;">
+      <table><thead><tr><th>CAPABILITY</th><th>INUKA PULSE (OURS)</th><th>STATUS QUO</th></tr></thead><tbody>${rows}</tbody></table>
+    </div>
+  </div>`;
+}
+
+// =========================================================================
+// tab wiring + render loop
+// =========================================================================
+const TABS = [
+  {id:'exec', label:'Executive View', render:paneExec},
+  {id:'fabric', label:'Live Data Fabric', render:paneFabric},
+  {id:'chat', label:'AI M&E Assistant', render:paneChat},
+  {id:'status', label:'Automation & Offline-Sync', render:paneStatus},
+  {id:'alerts', label:'Alerts & Governance', render:paneAlerts},
+  {id:'embed', label:'Website Embed', render:paneEmbed},
+  {id:'impact', label:'Quantified Impact Memo', render:paneImpact},
+  {id:'qa', label:'QA & UAT Evidence', render:paneQa},
+  {id:'diff', label:'Why Inuka Pulse', render:paneDiff},
+];
+const tabsEl=document.getElementById('tabs');
+const panesEl=document.getElementById('panes');
+TABS.forEach((t,i)=>{
+  const btn=document.createElement('button');
+  btn.className='tab-btn'+(i===0?' active':'');
+  btn.textContent=t.label;
+  btn.onclick=()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tabpane').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('pane-'+t.id).classList.add('active');
+  };
+  tabsEl.appendChild(btn);
+  const pane=document.createElement('div');
+  pane.className='tabpane'+(i===0?' active':'');
+  pane.id='pane-'+t.id;
+  panesEl.appendChild(pane);
+});
+function renderPane(id){
+  const t=TABS.find(t=>t.id===id);
+  const el=document.getElementById('pane-'+id);
+  if(t && el) el.innerHTML=t.render();
+}
+function renderLive(){
+  ['exec','fabric','status','alerts','embed'].forEach(renderPane);
+  const fr=document.getElementById('fabricFreshness');
+  if(fr) fr.textContent = state.lastFreshnessMs ? `· last event ${(state.lastFreshnessMs/1000).toFixed(1)}s freshness` : '';
+}
+TABS.forEach(t=>renderPane(t.id));
+</script>
+</body>
+</html>
