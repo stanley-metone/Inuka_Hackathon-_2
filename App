@@ -1,0 +1,296 @@
+app.py — Inuka M&E Console backend.
+
+Run:
+    pip install -r requirements.txt
+    python app.py
+Then open http://localhost:5000
+
+This is a real persistent server: a real SQLite database on disk, a real
+background thread that ingests events independently of any connected
+browser, and a real Server-Sent Events stream pushing live updates. Kill
+the process, restart it, and your data is still there — that's the
+difference between this and a client-side simulation.
+"""
+
+import json
+import queue
+import threading
+import time
+
+from flask import Flask, request, jsonify, Response, render_template
+
+import db
+import pipeline
+
+app = Flask(__name__)
+
+model = pipeline.DropoutModel()
+_subscribers = []  # list of Queue objects, one per connected SSE client
+_subscribers_lock = threading.Lock()
+_sim_thread = None
+_sim_stop_flag = threading.Event()
+
+
+def broadcast(event_type: str, payload: dict):
+    """Push an event to every connected SSE client."""
+    data = json.dumps({"type": event_type, "payload": payload})
+    with _subscribers_lock:
+        dead = []
+        for q in _subscribers:
+            try:
+                q.put_nowait(data)
+            except queue.Full:
+                dead.append(q)
+        for q in dead:
+            _subscribers.remove(q)
+
+
+def ingest_event(raw: dict) -> dict:
+    """The single ingestion path used by BOTH the public API and the
+    background simulator -- there is exactly one pipeline, not two."""
+    conn = db.get_conn()
+    violations = pipeline.validate_row(raw)
+
+    if violations:
+        db.insert_quarantine(conn, raw, violations)
+        conn.close()
+        result = {"status": "quarantined", "violations": violations, "beneficiary_id": raw.get("beneficiary_id")}
+        broadcast("quarantine", result)
+        return result
+
+    attendance = float(raw["attendance_pct"])
+    days_inactive = float(raw["days_since_last_activity"])
+    risk = model.predict_risk(attendance, days_inactive)
+    at_risk = risk >= pipeline.OPERATING_THRESHOLD and raw["milestone_status"] not in ("Dropped", "Completed")
+
+    row = {
+        "beneficiary_id": raw["beneficiary_id"],
+        "beneficiary_token": pipeline.tokenize(raw["beneficiary_id"]),
+        "pillar": raw["pillar"],
+        "region": raw["region"],
+        "application_date": raw.get("application_date"),
+        "milestone_status": raw["milestone_status"],
+        "attendance_pct": attendance,
+        "days_since_last_activity": days_inactive,
+        "disbursement_amount": float(raw["disbursement_amount"]),
+        "risk_score": risk,
+        "at_risk": at_risk,
+        "dedup_key": pipeline.dedup_key(raw),
+    }
+    inserted = db.insert_event(conn, row)
+
+    if not inserted:
+        conn.close()
+        result = {"status": "duplicate", "beneficiary_id": raw.get("beneficiary_id")}
+        broadcast("duplicate", result)
+        return result
+
+    summary = db.get_summary(conn)
+    conn.close()
+
+    result = {
+        "status": "ingested",
+        "beneficiary_token": row["beneficiary_token"],
+        "pillar": row["pillar"],
+        "region": row["region"],
+        "milestone_status": row["milestone_status"],
+        "risk_score": round(risk, 3),
+        "at_risk": at_risk,
+    }
+    broadcast("event", result)
+    broadcast("summary", summary)
+    if at_risk:
+        broadcast("alert", {
+            "beneficiary_token": row["beneficiary_token"], "pillar": row["pillar"],
+            "region": row["region"], "risk_score": round(risk, 3),
+            "attendance_pct": attendance, "days_since_last_activity": days_inactive,
+        })
+    return result
+
+
+# ---------------------------------------------------------------- routes --
+
+@app.route("/")
+def index():
+    return render_template("dashboard.html")
+
+
+@app.route("/api/health")
+def health():
+    conn = db.get_conn()
+    summary = db.get_summary(conn)
+    conn.close()
+    return jsonify({
+        "status": "ok",
+        "service": "inuka-me-console",
+        "model_metrics": model.metrics,
+        "totals": summary,
+    })
+
+
+@app.route("/api/events/ingest", methods=["POST"])
+def api_ingest():
+    raw = request.get_json(force=True)
+    if not raw:
+        return jsonify({"error": "JSON body required"}), 400
+    result = ingest_event(raw)
+    return jsonify(result), 201
+
+
+@app.route("/api/events/recent")
+def api_recent():
+    limit = int(request.args.get("limit", 50))
+    conn = db.get_conn()
+    events = db.get_recent_events(conn, limit)
+    conn.close()
+    # Anonymization-by-design: the raw beneficiary_id exists in the DB for
+    # internal dedup purposes only and must never leave the API surface.
+    for e in events:
+        e.pop("beneficiary_id", None)
+        e.pop("dedup_key", None)
+    return jsonify(events)
+
+
+@app.route("/api/dashboard/summary")
+def api_summary():
+    conn = db.get_conn()
+    summary = db.get_summary(conn)
+    conn.close()
+    return jsonify(summary)
+
+
+@app.route("/api/risk/at-risk")
+def api_at_risk():
+    limit = int(request.args.get("limit", 25))
+    conn = db.get_conn()
+    at_risk = db.get_at_risk(conn, limit)
+    conn.close()
+    return jsonify(at_risk)
+
+
+@app.route("/api/events/stream")
+def api_stream():
+    """Server-Sent Events: the browser holds this connection open and the
+    server pushes data down it the instant something happens -- genuine
+    push, not the browser polling in a loop."""
+    q = queue.Queue(maxsize=200)
+    with _subscribers_lock:
+        _subscribers.append(q)
+
+    def gen():
+        try:
+            conn = db.get_conn()
+            yield f"data: {json.dumps({'type':'summary','payload':db.get_summary(conn)})}\n\n"
+            conn.close()
+            while True:
+                try:
+                    data = q.get(timeout=15)
+                    yield f"data: {data}\n\n"
+                except queue.Empty:
+                    yield ": keepalive\n\n"
+        finally:
+            with _subscribers_lock:
+                if q in _subscribers:
+                    _subscribers.remove(q)
+
+    return Response(gen(), mimetype="text/event-stream", headers={
+        "Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive",
+    })
+
+
+@app.route("/api/simulator/control", methods=["POST"])
+def api_simulator_control():
+    body = request.get_json(force=True) or {}
+    action = body.get("action")
+    speed = float(body.get("speed", 1.0))
+    conn = db.get_conn()
+
+    if action == "start":
+        start_simulator(speed)
+        db.set_simulator_state(conn, running=1, speed=speed, started_at=db.now_iso())
+    elif action == "stop":
+        stop_simulator()
+        db.set_simulator_state(conn, running=0)
+    elif action == "speed":
+        db.set_simulator_state(conn, speed=speed)
+
+    state = db.get_simulator_state(conn)
+    conn.close()
+    broadcast("simulator_state", state)
+    return jsonify(state)
+
+
+@app.route("/api/simulator/state")
+def api_simulator_state():
+    conn = db.get_conn()
+    state = db.get_simulator_state(conn)
+    conn.close()
+    return jsonify(state)
+
+
+# ------------------------------------------------------------- simulator --
+
+BASE_URL = "http://127.0.0.1:5000"
+
+
+def simulator_worker():
+    import requests
+    conn = db.get_conn()
+    state = db.get_simulator_state(conn)
+    events = pipeline.generate_event_stream()
+    cursor = state["cursor"] if state["cursor"] < len(events) else 0
+    conn.close()
+
+    while not _sim_stop_flag.is_set():
+        conn = db.get_conn()
+        state = db.get_simulator_state(conn)
+        conn.close()
+        if not state["running"]:
+            time.sleep(0.3)
+            continue
+
+        if cursor >= len(events):
+            cursor = 0  # loop the stream so the demo never "runs dry"
+
+        event = events[cursor]
+        cursor += 1
+        try:
+            # Genuine HTTP call to our own API -- proves the endpoint
+            # actually works under real network calls, not just a
+            # function call shared in-process.
+            requests.post(f"{BASE_URL}/api/events/ingest", json=event, timeout=3)
+        except Exception as e:
+            print("simulator ingest error:", e)
+
+        conn = db.get_conn()
+        db.set_simulator_state(conn, cursor=cursor)
+        speed = db.get_simulator_state(conn)["speed"]
+        conn.close()
+        time.sleep(max(0.05, 1.0 / max(0.1, speed)))
+
+
+def start_simulator(speed=1.0):
+    global _sim_thread
+    _sim_stop_flag.clear()
+    if _sim_thread is None or not _sim_thread.is_alive():
+        _sim_thread = threading.Thread(target=simulator_worker, daemon=True)
+        _sim_thread.start()
+
+
+def stop_simulator():
+    conn = db.get_conn()
+    db.set_simulator_state(conn, running=0)
+    conn.close()
+
+
+def create_app():
+    db.init_db(reset=False)
+    print("Training dropout-risk model...")
+    metrics = model.train()
+    print("Model metrics:", metrics)
+    return app
+
+
+if __name__ == "__main__":
+    create_app()
+    app.run(host="0.0.0.0", port=5000, threaded=True, debug=False)
