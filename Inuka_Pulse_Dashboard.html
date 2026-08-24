@@ -1,425 +1,150 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Inuka Pulse — Real-Time M&E Dashboard &amp; Web Integration</title>
-<style>
-  :root{
-    --bg:#0B120F; --panel:#111C17; --panel2:#16221C; --line:#233029;
-    --ink:#EAF2ED; --inkDim:#8FA69A; --teal:#2FBF9F; --gold:#E8A93B;
-    --green:#4ADE80; --red:#F2555A; --violet:#9B8FF2; --blue:#4FA8E8;
-    --mono:'JetBrains Mono','IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
-    --sans:'Inter','Segoe UI',system-ui,sans-serif;
-  }
-  *{box-sizing:border-box;}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);}
-  .wrap{max-width:1180px;margin:0 auto;padding:22px 22px 48px;}
-  .row{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;margin-bottom:18px;}
-  .brand{display:flex;align-items:center;gap:10px;}
-  .logo{width:34px;height:34px;border-radius:8px;background:rgba(47,191,159,.12);border:1px solid rgba(47,191,159,.4);display:flex;align-items:center;justify-content:center;}
-  .title{font-size:19px;font-weight:700;letter-spacing:.2px;}
-  .subtitle{font-family:var(--mono);font-size:11px;color:var(--inkDim);letter-spacing:.6px;}
-  .pills{display:flex;gap:8px;flex-wrap:wrap;}
-  .pill{font-family:var(--mono);font-size:11px;letter-spacing:.4px;padding:3px 8px;border-radius:999px;white-space:nowrap;}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;}
-  .section-label{font-family:var(--mono);font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:var(--inkDim);margin-bottom:10px;}
-  .flow{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding:8px 2px;}
-  .flow-node{min-width:150px;border-radius:10px;padding:14px;background:var(--panel2);border:1px solid var(--line);transition:all .4s ease;flex:0 0 auto;}
-  .flow-node.active{background:rgba(47,191,159,.1);border-color:var(--teal);}
-  .flow-node .label{font-weight:600;font-size:13.5px;margin-top:8px;}
-  .flow-node .sub{font-family:var(--mono);font-size:10.5px;color:var(--inkDim);margin-top:3px;}
-  .flow-arrow{width:34px;display:flex;align-items:center;justify-content:center;color:var(--line);flex:0 0 auto;}
-  .tabs{display:flex;gap:6px;margin:16px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;}
-  .tab-btn{background:transparent;border:none;cursor:pointer;padding:9px 14px;font-family:var(--sans);font-size:13px;font-weight:600;color:var(--inkDim);border-bottom:2px solid transparent;margin-bottom:-1px;}
-  .tab-btn.active{color:var(--ink);border-bottom-color:var(--teal);}
-  .tabpane{display:none;}
-  .tabpane.active{display:block;}
-  .grid{display:grid;gap:14px;}
-  .grid-auto{grid-template-columns:repeat(auto-fit,minmax(210px,1fr));}
-  .grid-2{grid-template-columns:1fr 1fr;}
-  .grid-2-13{grid-template-columns:1.3fr 1fr;}
-  .grid-4{grid-template-columns:repeat(4,1fr);}
-  .kpi{font-family:var(--mono);font-size:28px;font-weight:700;}
-  .kpi-sub{font-size:12px;color:var(--inkDim);margin-top:4px;}
-  .kpi-sub.up{color:var(--green);display:flex;align-items:center;gap:4px;}
-  table{width:100%;border-collapse:collapse;font-size:13px;}
-  th{text-align:left;padding:8px 10px;font-family:var(--mono);font-size:11px;color:var(--inkDim);border-bottom:1px solid var(--line);letter-spacing:.4px;}
-  td{padding:10px;border-bottom:1px solid var(--line);}
-  .stage-card{flex:1 1 150px;background:var(--panel2);border-radius:8px;padding:12px;}
-  .stage-top{display:flex;justify-content:space-between;align-items:center;}
-  .stage-detail{font-family:var(--mono);font-size:11px;color:var(--inkDim);margin-top:6px;line-height:1.4;}
-  .alert{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;margin-bottom:8px;}
-  .alert-title{font-size:13px;}
-  .alert-time{font-family:var(--mono);font-size:10.5px;color:var(--inkDim);margin-top:3px;}
-  .policy-card{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px;}
-  .policy-t{font-family:var(--mono);font-size:11px;color:var(--teal);letter-spacing:.6px;}
-  .policy-d{font-size:12.5px;color:var(--inkDim);margin-top:6px;line-height:1.5;}
-  .legend-row{display:flex;justify-content:space-between;font-size:12px;margin-top:6px;}
-  .dot{width:8px;height:8px;border-radius:99px;display:inline-block;margin-right:6px;}
-  .foot-note{font-family:var(--mono);font-size:10.5px;color:var(--inkDim);grid-column:1/-1;}
-  .pillar-card{background:var(--panel2);border-radius:10px;padding:14px;border-top:1px solid var(--line);}
-  .pillar-name{font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px;}
-  .pillar-dot{width:10px;height:10px;border-radius:99px;display:inline-block;}
-  .embed-frame{border:1px dashed var(--line);border-radius:10px;padding:14px;background:#0E1613;}
-  .embed-browserbar{display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--panel2);border-radius:6px 6px 0 0;font-family:var(--mono);font-size:10.5px;color:var(--inkDim);}
-  .embed-dot{width:7px;height:7px;border-radius:99px;background:var(--line);}
-  svg text{font-family:var(--mono);}
-  @media (max-width:820px){ .grid-2, .grid-2-13, .grid-4 {grid-template-columns:1fr;} }
-</style>
-</head>
-<body>
-<div class="wrap">
+pipeline.py — the QA gates, anonymization, and dropout-risk model, shared
+by the API and the background simulator. This is the same architecture
+proven in Stage 1 (ingest -> clean & validate -> anonymize), re-pointed at
+beneficiary events and now with a trained predictive layer on top.
+"""
 
-  <div class="row">
-    <div class="brand">
-      <div class="logo">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2FBF9F" stroke-width="2"><path d="M3 12l4-7 4 12 3-9 3 4 4-8"/></svg>
-      </div>
-      <div>
-        <div class="title">Inuka Pulse</div>
-        <div class="subtitle">REAL-TIME M&amp;E DASHBOARD &amp; WEB INTEGRATION — INUKA FOUNDATION</div>
-      </div>
-    </div>
-    <div class="pills">
-      <span class="pill" style="color:var(--green);background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.35)">● LIVE — STREAMING</span>
-      <span class="pill" style="color:var(--inkDim);background:rgba(140,160,172,.08);border:1px solid rgba(140,160,172,.3)">Domain 3 · Problem 5</span>
-      <span class="pill" style="color:var(--inkDim);background:rgba(140,160,172,.08);border:1px solid rgba(140,160,172,.3)">Stage 2 · Upgraded from Stage 1 Data Fabric</span>
-    </div>
-  </div>
+import hashlib
+import random
+from datetime import datetime, timedelta
 
-  <div class="card" style="margin-bottom:18px;">
-    <div class="section-label">Unified Beneficiary Data Fabric — event-driven, four pillars to public impact view</div>
-    <div class="flow" id="flow"></div>
-  </div>
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import recall_score, precision_score, roc_auc_score
+from sklearn.preprocessing import StandardScaler
 
-  <div class="tabs" id="tabs"></div>
-  <div id="panes"></div>
+PILLARS = ["Scholarship", "Plus", "Vocational", "Tech"]
+REGIONS = ["Nairobi", "Mombasa", "Kisumu", "Nakuru", "Eldoret", "Garissa"]
+TOKEN_SALT = "inuka-me-console-salt"
+OPERATING_THRESHOLD = 0.40
 
-</div>
 
-<script>
-const C = {teal:'#2FBF9F', gold:'#E8A93B', green:'#4ADE80', red:'#F2555A', violet:'#9B8FF2', blue:'#4FA8E8', inkDim:'#8FA69A', line:'#233029'};
+def tokenize(beneficiary_id: str) -> str:
+    digest = hashlib.sha256((TOKEN_SALT + beneficiary_id).encode("utf-8")).hexdigest()
+    return f"BEN-TOKEN-{digest[:10]}"
 
-// ---------- data ----------
-const pillars = [
-  {name:'Scholarship', color:C.teal, active:1240, metric:'94% retention', sub:'Avg. GPA +0.6 pts YoY', reach:'1,240 students'},
-  {name:'Plus (Wellbeing & Economic)', color:C.violet, active:2050, metric:'87% report improved wellbeing', sub:'1,860 household economic check-ins', reach:'2,050 beneficiaries'},
-  {name:'Vocational (TVET)', color:C.gold, active:980, metric:'71% placed in work within 6mo', sub:'214 employer partners active', reach:'980 trainees'},
-  {name:'Tech & Digital Skills', color:C.blue, active:550, metric:'65% employed/freelancing in 3mo', sub:'38 bootcamp cohorts tracked', reach:'550 graduates'}
-];
-const ingestTrend = [
-  {t:'06:00',raw:2100,resolved:1980},{t:'08:00',raw:3400,resolved:3260},{t:'10:00',raw:5220,resolved:5040},
-  {t:'12:00',raw:4610,resolved:4470},{t:'14:00',raw:5980,resolved:5790},{t:'16:00',raw:6520,resolved:6310},{t:'18:00',raw:4890,resolved:4715}
-];
-const timeSavedTrend = [{wk:'W1',hrs:38},{wk:'W2',hrs:81},{wk:'W3',hrs:126},{wk:'W4',hrs:174}];
-const latencyHistory = [
-  {run:'09:00',lat:97},{run:'11:00',lat:99},{run:'13:00',lat:94},
-  {run:'15:00',lat:98},{run:'17:00',lat:96},{run:'19:00',lat:99}
-];
-const sourceBreakdown = [
-  {name:'Scholarship SIS',value:28,color:C.teal},{name:'Plus field app (offline-sync)',value:33,color:C.violet},
-  {name:'Vocational partner LMS',value:21,color:C.gold},{name:'Tech bootcamp platform',value:18,color:C.blue}
-];
-const pipelineStages = [
-  {label:'Capture (4 pillars)',status:'pass',detail:'6,520 events/hr peak, 4 source systems'},
-  {label:'Validate & De-dupe',status:'pass',detail:'98.4% schema pass rate'},
-  {label:'Identity Resolution',status:'pass',detail:'96.8% auto-match to unified beneficiary ID'},
-  {label:'Aggregate (streaming)',status:'pass',detail:'15-sec micro-batch window'},
-  {label:'Publish to API',status:'pass',detail:'Dashboard + public website widget'},
-  {label:'Offline-sync merge',status:'warn',detail:'3 field devices queued, syncing on reconnect'},
-  {label:'Monitor',status:'pass',detail:'Median freshness 22s / 99.4% uptime 7d'}
-];
-const alerts = [
-  {sev:'med',title:'Vocational LMS: 41 records held for manual identity review (name/DOB mismatch)',time:'6m ago'},
-  {sev:'low',title:'3 field-officer devices offline >2h — Plus pillar, Turkana cluster',time:'19m ago'},
-  {sev:'low',title:'Scholarship SIS: nightly batch reconciled cleanly, 0 discrepancies',time:'52m ago'},
-  {sev:'med',title:'Tech bootcamp platform: webhook retried twice before delivery',time:'1h ago'}
-];
-const diffRows = [
-  {cap:'Data cadence',ours:'Event-driven streaming, ~22s median freshness across all 4 pillars',theirs:'Manual monthly Excel roll-up per pillar, 2–3 week lag'},
-  {cap:'Beneficiary identity',ours:'Single unified ID graph; auto-resolves duplicates across pillar systems',theirs:'Same beneficiary counted separately in each pillar spreadsheet'},
-  {cap:'Field usability',ours:'Mobile-first, offline-capable capture with verified auto-sync on reconnect',theirs:'Paper forms or disconnected spreadsheets, re-keyed later'},
-  {cap:'External visibility',ours:'Live, embeddable widget on the Foundation website for donors/board',theirs:'Static PDF impact report, published annually'}
-];
-function sevColor(s){return s==='high'?C.red:s==='med'?C.gold:C.inkDim;}
-function statusColor(s){return s==='pass'?C.green:s==='warn'?C.gold:C.red;}
 
-// ---------- flow ----------
-const flowStages = [
-  {label:'4 Pillar Systems',sub:'SIS · field app · LMS · bootcamp'},
-  {label:'Event Stream',sub:'CDC + webhook ingest'},
-  {label:'Identity Graph',sub:'unified beneficiary ID'},
-  {label:'Live Aggregation',sub:'15s micro-batch'},
-  {label:'Dashboard + Website',sub:'embedded widget, public + admin'}
-];
-const flowEl = document.getElementById('flow');
-flowStages.forEach((s,i)=>{
-  const node = document.createElement('div');
-  node.className='flow-node';
-  node.id='flow-'+i;
-  node.innerHTML = `<div class="label">${s.label}</div><div class="sub">${s.sub}</div>`;
-  flowEl.appendChild(node);
-  if(i<flowStages.length-1){
-    const arrow=document.createElement('div');
-    arrow.className='flow-arrow';
-    arrow.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>';
-    flowEl.appendChild(arrow);
-  }
-});
-let flowIdx=0;
-setInterval(()=>{
-  document.querySelectorAll('.flow-node').forEach(n=>n.classList.remove('active'));
-  document.getElementById('flow-'+flowIdx).classList.add('active');
-  flowIdx=(flowIdx+1)%flowStages.length;
-},1400);
+def validate_row(row: dict) -> list:
+    violations = []
+    if not str(row.get("beneficiary_id", "")).strip():
+        violations.append("missing_beneficiary_id")
+    if not str(row.get("region", "")).strip():
+        violations.append("missing_region")
+    try:
+        att = float(row["attendance_pct"])
+        if not (0 <= att <= 100):
+            violations.append("attendance_out_of_range")
+    except (ValueError, KeyError, TypeError):
+        violations.append("attendance_unparseable")
+    try:
+        disb = float(row["disbursement_amount"])
+        if disb < 0:
+            violations.append("negative_disbursement")
+    except (ValueError, KeyError, TypeError):
+        violations.append("disbursement_unparseable")
+    return violations
 
-// ---------- tiny SVG chart helpers ----------
-function areaChart(data, keys, w=560, h=190){
-  const pad={l:40,r:8,t:10,b:22};
-  const maxV = Math.max(...data.map(d=>Math.max(...keys.map(k=>d[k.key]))));
-  const iw=w-pad.l-pad.r, ih=h-pad.t-pad.b;
-  const x = i => pad.l + (i/(data.length-1))*iw;
-  const y = v => pad.t + ih - (v/maxV)*ih;
-  let svg = `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}">`;
-  for(let g=0; g<=3; g++){
-    const gy = pad.t + (ih/3)*g;
-    svg += `<line x1="${pad.l}" y1="${gy}" x2="${w-pad.r}" y2="${gy}" stroke="${C.line}" stroke-width="1"/>`;
-  }
-  keys.forEach(k=>{
-    const pts = data.map((d,i)=>`${x(i)},${y(d[k.key])}`).join(' ');
-    const areaPts = `${pad.l},${pad.t+ih} ${pts} ${x(data.length-1)},${pad.t+ih}`;
-    svg += `<polygon points="${areaPts}" fill="${k.color}" opacity="${k.fillOpacity||0.15}"/>`;
-    svg += `<polyline points="${pts}" fill="none" stroke="${k.color}" stroke-width="2"/>`;
-  });
-  data.forEach((d,i)=>{
-    svg += `<text x="${x(i)}" y="${h-4}" font-size="9.5" fill="${C.inkDim}" text-anchor="middle">${d.t||d.wk}</text>`;
-  });
-  svg += `</svg>`;
-  return svg;
-}
-function barChart(data, key, w=460, h=210, minV=80, maxV=100){
-  const pad={l:34,r:8,t:10,b:24};
-  const iw=w-pad.l-pad.r, ih=h-pad.t-pad.b;
-  const bw = iw/data.length*0.55;
-  let svg = `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}">`;
-  for(let g=0; g<=2; g++){
-    const gy = pad.t + (ih/2)*g;
-    svg += `<line x1="${pad.l}" y1="${gy}" x2="${w-pad.r}" y2="${gy}" stroke="${C.line}" stroke-width="1"/>`;
-  }
-  data.forEach((d,i)=>{
-    const v=d[key];
-    const bh = ((v-minV)/(maxV-minV))*ih;
-    const bx = pad.l + (iw/data.length)*i + (iw/data.length-bw)/2;
-    const by = pad.t+ih-bh;
-    svg += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" fill="${v>=97?C.green:C.gold}" rx="3"/>`;
-    svg += `<text x="${bx+bw/2}" y="${h-6}" font-size="9" fill="${C.inkDim}" text-anchor="middle">${d.run}</text>`;
-  });
-  svg += `</svg>`;
-  return svg;
-}
-function donutChart(data, w=200, h=190){
-  const cx=w/2, cy=h/2, r=64, ir=42;
-  const total = data.reduce((a,d)=>a+d.value,0);
-  let angle=-90, svg=`<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}">`;
-  data.forEach(d=>{
-    const sweep = (d.value/total)*360;
-    const a0 = angle*Math.PI/180, a1=(angle+sweep)*Math.PI/180;
-    const x0=cx+r*Math.cos(a0), y0=cy+r*Math.sin(a0);
-    const x1=cx+r*Math.cos(a1), y1=cy+r*Math.sin(a1);
-    const xi0=cx+ir*Math.cos(a1), yi0=cy+ir*Math.sin(a1);
-    const xi1=cx+ir*Math.cos(a0), yi1=cy+ir*Math.sin(a0);
-    const large = sweep>180?1:0;
-    svg += `<path d="M${x0},${y0} A${r},${r} 0 ${large} 1 ${x1},${y1} L${xi0},${yi0} A${ir},${ir} 0 ${large} 0 ${xi1},${yi1} Z" fill="${d.color}" stroke="#111C17" stroke-width="2"/>`;
-    angle += sweep;
-  });
-  svg += `</svg>`;
-  return svg;
-}
-function icon(name, color, size=15){
-  const icons = {
-    check:'<path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/>',
-    warn:'<path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9L2 20h20L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
-    x:'<circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/>',
-    file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>'
-  };
-  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icons[name]}</svg>`;
-}
 
-// ---------- tab: exec ----------
-function paneExec(){
-  const totalReach = pillars.reduce((a,p)=>a+p.active,0);
-  const cards = pillars.map(p=>`
-    <div class="pillar-card">
-      <div class="pillar-name"><span class="pillar-dot" style="background:${p.color}"></span>${p.name}</div>
-      <div class="kpi" style="margin-top:8px;color:${p.color}">${p.active.toLocaleString()}</div>
-      <div class="kpi-sub">${p.metric}</div>
-      <div class="kpi-sub" style="margin-top:4px;">${p.sub}</div>
-    </div>`).join('');
-  return `
-  <div class="grid grid-auto">
-    <div class="card"><div class="section-label">Unique beneficiaries, live (deduped across pillars)</div><div class="kpi" style="color:${C.teal}">${totalReach.toLocaleString()}</div><div class="kpi-sub up">▲ +186 this week, identity-graph resolved</div></div>
-    <div class="card"><div class="section-label">Events streamed / 24h</div><div class="kpi">34,720</div><div class="kpi-sub">across 4 pillar source systems</div></div>
-    <div class="card"><div class="section-label">Median data freshness</div><div class="kpi" style="color:${C.green}">22 sec</div><div class="kpi-sub">source event → dashboard/website</div></div>
-    <div class="card"><div class="section-label">Officer reporting hours saved / wk</div><div class="kpi" style="color:${C.gold}">43.5 hrs</div><div class="kpi-sub">see Quantified Impact Memo</div></div>
-    <div class="card" style="grid-column:1/-1">
-      <div class="section-label">Program reach by pillar (live)</div>
-      <div class="grid grid-4">${cards}</div>
-    </div>
-    <div class="card" style="grid-column:span 2">
-      <div class="section-label">Raw events → identity-resolved records, hourly</div>
-      ${areaChart(ingestTrend,[{key:'raw',color:C.inkDim,fillOpacity:.12},{key:'resolved',color:C.teal,fillOpacity:.25}])}
-    </div>
-    <div class="card" style="grid-column:span 2">
-      <div class="section-label">Cumulative officer hours reclaimed (weekly)</div>
-      ${areaChart(timeSavedTrend,[{key:'hrs',color:C.gold,fillOpacity:.18}])}
-    </div>
-    <div class="foot-note">Figures are illustrative hackathon estimates seeded from Stage 1 pipeline volumes; see Quantified Impact Memo for method and the field-validation plan.</div>
-  </div>`;
-}
+def dedup_key(row: dict) -> str:
+    raw = f"{row.get('beneficiary_id')}|{row.get('pillar')}|{row.get('region')}|{row.get('application_date')}|{row.get('milestone_status')}|{row.get('attendance_pct')}|{row.get('days_since_last_activity')}|{row.get('disbursement_amount')}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
-function panePipeline(){
-  const legend = sourceBreakdown.map(d=>`<div class="legend-row"><span><span class="dot" style="background:${d.color}"></span>${d.name}</span><span style="font-family:var(--mono);color:var(--inkDim)">${d.value}%</span></div>`).join('');
-  const steps = [
-    {t:'Capture',d:'Each pillar system emits events on create/update — SIS enrollment, field-app check-in, LMS milestone, bootcamp assessment.'},
-    {t:'Resolve identity',d:'Probabilistic + deterministic matching links records to one Unified Beneficiary ID across all 4 pillars (96.8% auto-match).'},
-    {t:'Aggregate live',d:'A 15-second streaming window rolls events into pillar and cross-pillar KPIs — no more end-of-month batch jobs.'},
-    {t:'Publish',d:'A single API feeds both the internal admin dashboard and the read-only public widget embedded on the Foundation website.'}
-  ].map(s=>`<div class="policy-card"><div class="policy-t">${s.t.toUpperCase()}</div><div class="policy-d">${s.d}</div></div>`).join('');
-  return `
-  <div class="grid grid-2-13">
-    <div class="card">
-      <div class="section-label">End-to-end pipeline latency, % within 30s SLO (today)</div>
-      ${barChart(latencyHistory,'lat')}
-      <div style="font-size:12px;color:var(--inkDim);margin-top:8px;">SLO: source event visible on dashboard within 30 seconds, 95% of the time.</div>
-    </div>
-    <div class="card">
-      <div class="section-label">Event volume by source system</div>
-      <div style="display:flex;justify-content:center;">${donutChart(sourceBreakdown)}</div>
-      ${legend}
-    </div>
-    <div class="card" style="grid-column:1/-1">
-      <div class="section-label">The Linkup: how Stage 1's batch ETL became this Stage 2 real-time fabric</div>
-      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));">${steps}</div>
-    </div>
-  </div>`;
-}
 
-function panePipelineStatus(){
-  const stages = pipelineStages.map(s=>`
-    <div class="stage-card" style="border:1px solid ${statusColor(s.status)}55">
-      <div class="stage-top"><span style="font-size:13px;font-weight:600;">${s.label}</span>${s.status==='pass'?icon('check',C.green):icon('warn',C.gold)}</div>
-      <div class="stage-detail">${s.detail}</div>
-    </div>`).join('');
-  return `
-  <div class="grid">
-    <div class="card">
-      <div class="section-label">Streaming pipeline — live status</div>
-      <div style="display:flex;flex-wrap:wrap;gap:10px;">${stages}</div>
-    </div>
-    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));">
-      <div class="card"><div class="section-label">Pipeline uptime (7d)</div><div class="kpi">99.4%</div></div>
-      <div class="card"><div class="section-label">Field devices with pending offline-sync</div><div class="kpi" style="color:${C.gold}">3</div><div class="kpi-sub">auto-merges on reconnect, no data loss</div></div>
-      <div class="card"><div class="section-label">Offline-sync test pass rate</div><div class="kpi" style="color:${C.green}">100%</div><div class="kpi-sub">28/28 scripted scenarios — see QA/UAT Evidence</div></div>
-    </div>
-  </div>`;
-}
+# --------------------------------------------------------------------------
+# Dropout-risk model — trained once at server startup on a synthetic,
+# structurally realistic dataset with a genuine, learnable dropout pattern.
+# --------------------------------------------------------------------------
 
-function paneAlerts(){
-  const rows = alerts.map(a=>`
-    <div class="alert" style="border-left:3px solid ${sevColor(a.sev)}">
-      ${icon('file',sevColor(a.sev))}
-      <div style="flex:1"><div class="alert-title">${a.title}</div><div class="alert-time">${a.time}</div></div>
-      <span class="pill" style="color:${sevColor(a.sev)};background:${sevColor(a.sev)}14;border:1px solid ${sevColor(a.sev)}55">${a.sev.toUpperCase()}</span>
-    </div>`).join('');
-  const compliance = [
-    {l:'Beneficiary consent on record',v:'100% of active records',ok:true},
-    {l:'PII masked in public website widget',v:'Enforced, admin view only shows detail',ok:true},
-    {l:'Identity-review backlog',v:'41 records (auto-flagged)',ok:false},
-    {l:'Offline devices pending sync',v:'3 (queued, non-blocking)',ok:true}
-  ].map(r=>`
-    <div class="policy-card">
-      <div style="font-size:11.5px;color:var(--inkDim)">${r.l}</div>
-      <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">${r.ok?icon('check',C.green,14):icon('warn',C.gold,14)}<span style="font-family:var(--mono);font-size:13px;">${r.v}</span></div>
-    </div>`).join('');
-  return `
-  <div class="grid">
-    <div class="card"><div class="section-label">Active alerts</div>${rows}</div>
-    <div class="card"><div class="section-label">Data governance posture</div><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));">${compliance}</div></div>
-  </div>`;
-}
+class DropoutModel:
+    def __init__(self):
+        self.model = None
+        self.scaler = None
+        self.metrics = None
 
-function paneEmbed(){
-  return `
-  <div class="grid">
-    <div class="card">
-      <div class="section-label">Public website widget — read-only, no PII, embedded via iframe/API</div>
-      <div class="embed-frame">
-        <div class="embed-browserbar"><span class="embed-dot"></span><span class="embed-dot"></span><span class="embed-dot"></span>&nbsp;&nbsp;inukafoundation.org/impact</div>
-        <div style="padding:16px 4px;">
-          <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:${C.ink};">Our Impact, Right Now</div>
-          <div class="grid grid-4">
-            ${pillars.map(p=>`<div class="pillar-card" style="padding:10px;"><div style="font-size:11px;color:var(--inkDim);">${p.name}</div><div class="kpi" style="font-size:22px;color:${p.color};margin-top:4px;">${p.active.toLocaleString()}</div><div style="font-size:10.5px;color:var(--inkDim);margin-top:2px;">${p.metric}</div></div>`).join('')}
-          </div>
-          <div style="font-family:var(--mono);font-size:10px;color:var(--inkDim);margin-top:12px;">Updated live · powered by Inuka Pulse</div>
-        </div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="section-label">Integration notes</div>
-      <div class="grid grid-2">
-        <div class="policy-card"><div class="policy-t">EMBED METHOD</div><div class="policy-d">Signed, read-only JSON endpoint + a lightweight embeddable snippet the Foundation's web team drops into the existing site — no rebuild of the website required.</div></div>
-        <div class="policy-card"><div class="policy-t">ACCESS TIERS</div><div class="policy-d">Public widget: aggregate pillar KPIs only. Admin dashboard: full drill-down, requires Foundation staff login.</div></div>
-        <div class="policy-card"><div class="policy-t">LANGUAGE &amp; ACCESS</div><div class="policy-d">English/Swahili toggle planned for Stage 3; current build is mobile-responsive and screen-reader labeled.</div></div>
-        <div class="policy-card"><div class="policy-t">DEPLOYABILITY</div><div class="policy-d">Pilot-ready: works against Stage 1's existing pillar data sources today; no new source-system migration required.</div></div>
-      </div>
-    </div>
-  </div>`;
-}
+    def train(self, seed=7, n=800):
+        random.seed(seed)
+        rows = []
+        for i in range(n):
+            base_attendance = random.gauss(78, 15)
+            attendance_pct = max(0, min(100, base_attendance))
+            days_since_activity = int(max(0, random.gauss(20, 25)))
+            risk_score = (100 - attendance_pct) * 0.6 + days_since_activity * 0.8
+            dropout_prob = 1 / (1 + np.exp(-(risk_score - 55) / 12))
+            dropout = 1 if random.random() < dropout_prob else 0
+            rows.append({
+                "attendance_pct": attendance_pct,
+                "days_since_last_activity": days_since_activity,
+                "dropout_flag": dropout,
+            })
 
-function paneDiff(){
-  const rows = diffRows.map(r=>`<tr><td style="font-weight:600">${r.cap}</td><td style="color:${C.teal}">${r.ours}</td><td style="color:var(--inkDim)">${r.theirs}</td></tr>`).join('');
-  return `
-  <div class="card">
-    <div class="section-label">Why Inuka Pulse is different</div>
-    <div style="overflow-x:auto;">
-      <table>
-        <thead><tr><th>CAPABILITY</th><th>INUKA PULSE (OURS)</th><th>STATUS QUO</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-  </div>`;
-}
+        X = np.array([[r["attendance_pct"], r["days_since_last_activity"]] for r in rows])
+        y = np.array([r["dropout_flag"] for r in rows])
 
-const TABS = [
-  {id:'exec',label:'Executive View',render:paneExec},
-  {id:'pipeline',label:'Data Fabric',render:panePipeline},
-  {id:'status',label:'Pipeline & Offline-Sync',render:panePipelineStatus},
-  {id:'alerts',label:'Alerts & Governance',render:paneAlerts},
-  {id:'embed',label:'Website Embed',render:paneEmbed},
-  {id:'diff',label:'Why Inuka Pulse',render:paneDiff}
-];
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.25, random_state=42, stratify=y
+        )
+        self.scaler = StandardScaler().fit(X_train)
+        X_train_s = self.scaler.transform(X_train)
+        X_test_s = self.scaler.transform(X_test)
 
-const tabsEl = document.getElementById('tabs');
-const panesEl = document.getElementById('panes');
-TABS.forEach((t,i)=>{
-  const btn=document.createElement('button');
-  btn.className='tab-btn'+(i===0?' active':'');
-  btn.textContent=t.label;
-  btn.onclick=()=>{
-    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-    document.querySelectorAll('.tabpane').forEach(p=>p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('pane-'+t.id).classList.add('active');
-  };
-  tabsEl.appendChild(btn);
+        self.model = LogisticRegression(class_weight="balanced")
+        self.model.fit(X_train_s, y_train)
 
-  const pane=document.createElement('div');
-  pane.className='tabpane'+(i===0?' active':'');
-  pane.id='pane-'+t.id;
-  pane.innerHTML=t.render();
-  panesEl.appendChild(pane);
-});
-</script>
-</body>
-</html>
+        probs = self.model.predict_proba(X_test_s)[:, 1]
+        preds_op = (probs >= OPERATING_THRESHOLD).astype(int)
+        self.metrics = {
+            "recall_at_threshold": round(recall_score(y_test, preds_op), 3),
+            "precision_at_threshold": round(precision_score(y_test, preds_op), 3),
+            "roc_auc": round(roc_auc_score(y_test, probs), 3),
+            "operating_threshold": OPERATING_THRESHOLD,
+            "n_test": len(y_test),
+        }
+        return self.metrics
+
+    def predict_risk(self, attendance_pct: float, days_since_last_activity: float) -> float:
+        X = self.scaler.transform([[attendance_pct, days_since_last_activity]])
+        return float(self.model.predict_proba(X)[0][1])
+
+
+# --------------------------------------------------------------------------
+# Synthetic event generator for the background simulator — includes the
+# same kind of injected messiness the QA gate is meant to catch.
+# --------------------------------------------------------------------------
+
+def generate_event_stream(seed=99, n=800):
+    random.seed(seed)
+    start = datetime(2025, 1, 1)
+    events = []
+    for i in range(n):
+        pillar = random.choice(PILLARS)
+        region = random.choice(REGIONS)
+        app_date = start + timedelta(days=random.randint(0, 550))
+        attendance_pct = round(max(0, min(100, random.gauss(78, 15))), 1)
+        days_since_activity = int(max(0, random.gauss(20, 25)))
+        status = random.choices(
+            ["Applied", "Enrolled", "Active", "Completed", "Dropped"],
+            weights=[10, 25, 40, 15, 10],
+        )[0]
+        disbursement = round(random.uniform(2000, 25000), 2) if status != "Applied" else 0.0
+
+        events.append({
+            "beneficiary_id": f"BEN-{i+1:05d}",
+            "pillar": pillar,
+            "region": region,
+            "application_date": app_date.strftime("%Y-%m-%d"),
+            "milestone_status": status,
+            "attendance_pct": attendance_pct,
+            "days_since_last_activity": days_since_activity,
+            "disbursement_amount": disbursement,
+        })
+
+    # Inject realistic messiness, same spirit as Stage 1
+    events[15] = dict(events[15]); events[15]["beneficiary_id"] = ""
+    events[142] = dict(events[142]); events[142]["region"] = ""
+    events[301] = dict(events[301]); events[301]["attendance_pct"] = 143.0
+    events[488] = dict(events[488]); events[488]["disbursement_amount"] = -5000.0
+    events.append(dict(events[600]))  # exact duplicate
+
+    random.shuffle(events)
+    return events
