@@ -1,6 +1,6 @@
 QA & UAT Evidence Report
 Inuka Pulse — Real-Time M&E Dashboard & Web Integration
-Stage 2 · Domain 3, Problem Statement 5 · Beta build, pilot-candidate
+Beta build, pilot-candidate
 1. Scope & Method
 This report covers three layers of verification for the Inuka Pulse beta: (a) automated test coverage across the streaming data fabric and dashboard, (b) scripted offline-sync testing for the mobile field-capture layer, and (c) User Acceptance Testing conducted as structured, role-based walkthroughs against the running prototype.
 A note on the UAT evidence: for this hackathon submission, UAT was run as an internal dry-run — team members role-played the four field/admin personas below against the live prototype using a fixed test script, rather than live sessions with named Inuka staff. Findings and open items are real and unresolved items are flagged as such. We recommend a short live UAT pass with actual Inuka field officers and M&E/admin staff before pilot rollout, using the same script.
@@ -28,7 +28,7 @@ Low-storage device behavior	Fill device storage to 95% while queue pending	Pass 
 4. User Acceptance Testing Notes
 4.1 Persona: Vocational Program Officer
 ●	Liked that placement outcomes update automatically instead of a monthly manual count against partner employer lists.
-●	Requested a filter to view only their own assigned trainee cohort — noted as a Stage 3 enhancement, not a blocker.
+●	Requested a filter to view only their own assigned trainee cohort — noted as a a stage enhancement, not a blocker.
 4.2 Persona: M&E Manager (cross-pillar)
 ●	Confirmed the unified beneficiary count matched their manual spot-check for a 20-record sample.
 ●	Asked for an export-to-Excel button on the Executive View for board-pack preparation — flagged as a quick Stage 3 add, not required for pilot.
