@@ -2,7 +2,7 @@ Problem: Program Impact, M&E and Analytics
 
 ## 1. Project Overview
 
-This project was developed for **Inuka Hackathon 2** under **Domain 3: Program Impact, Monitoring & Evaluation (M&E), and Analytics**.
+This project was developed for organizations with M&E tracking and Reporting Challenges: Program Impact, Monitoring & Evaluation (M&E), and Analytics**.
 
 ### Focus
 
@@ -366,7 +366,7 @@ Future iterations can extend the platform with:
 
 ## 15. Conclusion
 
-**Inuka Hackathon 2 — Domain 3** focused on turning program data into a strategic asset for the Inuka Foundation.
+**Inuka Pulse focused on turning program data into a strategic asset for various diverse Organizations.
 
 By combining an upgraded data pipeline, centralized M&E analytics, web integration, automation, and actionable intelligence, the project establishes a pathway toward **proactive, data-driven program management**.
 
@@ -378,7 +378,6 @@ The ultimate vision is simple:
 
 ## Team
 
-**Hackathon:** Inuka Hackathon 2
-**Domain:** Domain 3 — Program Impact, M&E and Analytics
+**Domain:**Program Impact, M&E and Analytics
 **Solution:** Centralized Real-Time M&E Dashboard & Web Integration
 **Objective:** Transform raw program data into live, actionable intelligence for leadership and donors.
